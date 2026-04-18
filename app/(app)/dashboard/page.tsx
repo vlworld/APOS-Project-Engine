@@ -6,7 +6,7 @@ export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
 
   return (
-    <div className="max-w-4xl">
+    <div className="max-w-4xl mx-auto">
       <div className="flex items-center gap-3 mb-6">
         <div className="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center">
           <FolderKanban className="w-5 h-5 text-emerald-600" />
