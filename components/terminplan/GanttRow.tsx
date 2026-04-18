@@ -93,7 +93,7 @@ export default function GanttRow({
 
       {/* Name (flex-1) */}
       <div
-        className="flex-1 min-w-0 flex items-center gap-1.5"
+        className="flex-1 min-w-[140px] flex items-center gap-1.5"
         style={{ paddingLeft: depth * 16 + 8, paddingRight: 8 }}
       >
         {/* Expand-Icon (nur wenn hasChildren) */}

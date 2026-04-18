@@ -123,9 +123,9 @@ export function daysBetween(a: Date, b: Date): number {
 
 // --- Formatter --------------------------------------------------------------
 
-/** "03.04." */
+/** "3" — nur der Tag (Monat separat im übergeordneten Header). */
 export function formatDayLabel(d: Date): string {
-  return `${pad2(d.getDate())}.${pad2(d.getMonth() + 1)}.`;
+  return String(d.getDate());
 }
 
 /** "KW 14" */

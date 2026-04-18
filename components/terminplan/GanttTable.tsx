@@ -50,7 +50,7 @@ export default function GanttTable({
         style={{ height: headerHeight }}
       >
         <div className="shrink-0 w-[60px] px-2 text-right">Nr.</div>
-        <div className="flex-1 min-w-0 px-2">Name</div>
+        <div className="flex-1 min-w-[140px] px-2 truncate">Name</div>
         <div className="shrink-0 w-[90px] px-2">Status</div>
         <div className="shrink-0 w-[130px] px-2">Gewerk</div>
         <div className="shrink-0 w-[90px] px-2">Start</div>

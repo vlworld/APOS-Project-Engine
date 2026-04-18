@@ -2,10 +2,18 @@
 
 // Einzelner Balken / Meilenstein / Parent-Bar in der Timeline.
 // Reine Präsentation — absolute positioniert innerhalb einer Zeile.
+//
+// Drag & Drop (wenn canEdit && onCommitMove && timelineWidthPx gesetzt):
+//  - Linker Rand  (4 px, cursor ew-resize) → verändert startDate
+//  - Mitte        (cursor grab/grabbing)   → verschiebt start+end
+//  - Rechter Rand (4 px, cursor ew-resize) → verändert endDate
+// Milestones: nur Move, kein Resize (1-Tag-Events).
+// Escape bricht Drag ab. Shift beim Move → cascade-Hinweis.
 
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ScheduleItemDTO, TradeCategoryDTO } from "@/lib/terminplan/types";
-import { formatDateFull } from "@/lib/terminplan/time";
+import { addDays, formatDateFull, pixelDeltaToDays } from "@/lib/terminplan/time";
+import { toDateKey } from "@/lib/terminplan/workdays";
 import { safeColor, type TerminplanColor } from "./TailwindColorSafelist";
 
 const STATUS_LABEL: Record<ScheduleItemDTO["status"], string> = {
@@ -14,13 +22,34 @@ const STATUS_LABEL: Record<ScheduleItemDTO["status"], string> = {
   DONE: "Erledigt",
 };
 
-interface GanttBarProps {
+type DragType = "move" | "resize-start" | "resize-end";
+
+interface DragState {
+  type: DragType;
+  startX: number;
+  initialStart: Date;
+  initialEnd: Date;
+  deltaDays: number;
+  shift: boolean;
+}
+
+export interface GanttBarProps {
   item: ScheduleItemDTO;
   tradeCategory: TradeCategoryDTO | undefined;
   leftPercent: number;
   widthPercent: number;
   isParent: boolean;
   onClick: () => void;
+  // Drag & Drop — optional, nur wenn alle gesetzt sind wird DnD aktiv.
+  canEdit?: boolean;
+  timelineWidthPx?: number;
+  totalDays?: number;
+  onCommitMove?: (
+    itemId: string,
+    newStart: string,
+    newEnd: string,
+    options?: { cascade?: boolean },
+  ) => void | Promise<void>;
 }
 
 export default function GanttBar({
@@ -30,25 +59,209 @@ export default function GanttBar({
   widthPercent,
   isParent,
   onClick,
+  canEdit = false,
+  timelineWidthPx,
+  totalDays,
+  onCommitMove,
 }: GanttBarProps) {
   const [hovered, setHovered] = useState(false);
+  const [drag, setDrag] = useState<DragState | null>(null);
+
+  // RAF-throttled mousemove — wir speichern den letzten ClientX und verwerten
+  // ihn in einem requestAnimationFrame. Verhindert UI-Thrashing bei 120 Hz.
+  const rafRef = useRef<number | null>(null);
+  const latestClientXRef = useRef<number>(0);
+  const latestShiftRef = useRef<boolean>(false);
 
   // Farbe: item.color (Override) > tradeCategory.color > "blue"
   const color: TerminplanColor = safeColor(item.color ?? tradeCategory?.color);
 
+  // Ist Drag & Drop grundsätzlich möglich?
+  const dndEnabled =
+    canEdit === true &&
+    typeof onCommitMove === "function" &&
+    typeof timelineWidthPx === "number" &&
+    timelineWidthPx > 0 &&
+    typeof totalDays === "number" &&
+    totalDays > 0;
+
+  // Milestones können nur verschoben werden — kein Resize.
+  const canMove = dndEnabled && !isParent;
+  const canResize = dndEnabled && !isParent && !item.isMilestone;
+
+  // --- Drag lifecycle --------------------------------------------------------
+
+  const commitDrag = useCallback(
+    (state: DragState) => {
+      if (!onCommitMove) return;
+      const initialStart = state.initialStart;
+      const initialEnd = state.initialEnd;
+      let newStart = initialStart;
+      let newEnd = initialEnd;
+      const d = state.deltaDays;
+
+      if (state.type === "move") {
+        newStart = addDays(initialStart, d);
+        newEnd = addDays(initialEnd, d);
+      } else if (state.type === "resize-start") {
+        newStart = addDays(initialStart, d);
+        // Nicht hinter Ende rutschen
+        if (newStart.getTime() > initialEnd.getTime()) {
+          newStart = initialEnd;
+        }
+      } else if (state.type === "resize-end") {
+        newEnd = addDays(initialEnd, d);
+        // Nicht vor Start rutschen
+        if (newEnd.getTime() < initialStart.getTime()) {
+          newEnd = initialStart;
+        }
+      }
+
+      if (d === 0) return; // nichts zu tun
+
+      const startKey = toDateKey(newStart);
+      const endKey = toDateKey(newEnd);
+      void onCommitMove(item.id, startKey, endKey, {
+        cascade: state.type === "move" && state.shift,
+      });
+    },
+    [item.id, onCommitMove],
+  );
+
+  const endDrag = useCallback(
+    (commit: boolean) => {
+      setDrag((prev) => {
+        if (!prev) return null;
+        if (commit) commitDrag(prev);
+        return null;
+      });
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+    },
+    [commitDrag],
+  );
+
+  // Global listeners während Drag
+  useEffect(() => {
+    if (!drag) return;
+
+    const onMouseMove = (ev: MouseEvent): void => {
+      latestClientXRef.current = ev.clientX;
+      latestShiftRef.current = ev.shiftKey;
+      if (rafRef.current !== null) return;
+      rafRef.current = requestAnimationFrame(() => {
+        rafRef.current = null;
+        setDrag((prev) => {
+          if (!prev) return prev;
+          if (
+            typeof timelineWidthPx !== "number" ||
+            typeof totalDays !== "number"
+          ) {
+            return prev;
+          }
+          const deltaPx = latestClientXRef.current - prev.startX;
+          const deltaDays = pixelDeltaToDays(
+            deltaPx,
+            timelineWidthPx,
+            totalDays,
+          );
+          if (
+            deltaDays === prev.deltaDays &&
+            latestShiftRef.current === prev.shift
+          ) {
+            return prev;
+          }
+          return { ...prev, deltaDays, shift: latestShiftRef.current };
+        });
+      });
+    };
+
+    const onMouseUp = (): void => {
+      endDrag(true);
+    };
+
+    const onKeyDown = (ev: KeyboardEvent): void => {
+      if (ev.key === "Escape") {
+        endDrag(false);
+      }
+    };
+
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [drag, endDrag, timelineWidthPx, totalDays]);
+
+  const startDrag = useCallback(
+    (type: DragType, ev: React.MouseEvent): void => {
+      if (!dndEnabled) return;
+      if (type !== "move" && !canResize) return;
+      if (type === "move" && !canMove) return;
+      // Nur linke Maustaste
+      if (ev.button !== 0) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      setDrag({
+        type,
+        startX: ev.clientX,
+        initialStart: new Date(item.startDate),
+        initialEnd: new Date(item.endDate),
+        deltaDays: 0,
+        shift: ev.shiftKey,
+      });
+    },
+    [dndEnabled, canMove, canResize, item.startDate, item.endDate],
+  );
+
+  // Aktueller (previewter) Start/End während Drag — für Tooltip & Geometrie
+  const previewStart = drag
+    ? drag.type === "resize-end"
+      ? drag.initialStart
+      : addDays(drag.initialStart, drag.deltaDays)
+    : null;
+  const previewEnd = drag
+    ? drag.type === "resize-start"
+      ? drag.initialEnd
+      : drag.type === "move"
+        ? addDays(drag.initialEnd, drag.deltaDays)
+        : addDays(drag.initialEnd, drag.deltaDays)
+    : null;
+
+  // Pixel-Offset für visuelles Feedback (nur während Drag).
+  // Wir schieben/verbreitern rein per style, ohne Layout-Änderung.
+  const dragPxDelta =
+    drag && typeof timelineWidthPx === "number" && typeof totalDays === "number"
+      ? (drag.deltaDays / totalDays) * timelineWidthPx
+      : 0;
+
   const left = `${Math.max(leftPercent, 0)}%`;
 
-  // Milestone → Raute
+  // --- Milestone ------------------------------------------------------------
+
   if (item.isMilestone) {
+    const translateX = drag ? `${dragPxDelta}px` : "0px";
     return (
       <>
         <button
           type="button"
-          onClick={onClick}
+          onClick={drag ? undefined : onClick}
           onMouseEnter={() => setHovered(true)}
           onMouseLeave={() => setHovered(false)}
-          className="absolute top-1/2 -translate-y-1/2 flex items-center justify-center group"
-          style={{ left, transform: "translate(-50%, -50%)" }}
+          onMouseDown={canMove ? (e) => startDrag("move", e) : undefined}
+          className={`absolute top-1/2 -translate-y-1/2 flex items-center justify-center group ${
+            canMove ? (drag ? "cursor-grabbing" : "cursor-grab") : ""
+          }`}
+          style={{
+            left,
+            transform: `translate(calc(-50% + ${translateX}), -50%)`,
+            opacity: drag ? 0.7 : 1,
+          }}
           aria-label={`Meilenstein ${item.name}`}
         >
           <span
@@ -59,20 +272,26 @@ export default function GanttBar({
             }`}
           />
         </button>
-        {hovered && (
+        {(hovered || drag) && (
           <BarTooltip
             item={item}
             tradeCategory={tradeCategory}
             color={color}
             leftPercent={leftPercent}
+            previewStart={previewStart}
+            previewEnd={previewEnd}
+            dragType={drag?.type}
+            shift={drag?.shift ?? false}
           />
         )}
       </>
     );
   }
 
-  // Parent-Bar (Phase): dünner grauer Balken mit Caps
+  // --- Parent-Bar -----------------------------------------------------------
+
   if (isParent) {
+    // Parents werden nicht ge-dragged — Hierarchie-Rollups sind abgeleitet.
     return (
       <>
         <button
@@ -90,9 +309,7 @@ export default function GanttBar({
           aria-label={`Phase ${item.name}`}
         >
           <span className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-1.5 bg-gray-400 rounded-sm" />
-          {/* Linke Cap */}
           <span className="absolute left-0 top-0 bottom-0 w-1 bg-gray-600 rounded-l-sm" />
-          {/* Rechte Cap */}
           <span className="absolute right-0 top-0 bottom-0 w-1 bg-gray-600 rounded-r-sm" />
         </button>
         {hovered && (
@@ -107,18 +324,38 @@ export default function GanttBar({
     );
   }
 
-  // Normaler Task-Balken
+  // --- Normaler Task-Balken -------------------------------------------------
+
   const isTiny = widthPercent < 3;
   const safeWidth = `${Math.max(widthPercent, 0.5)}%`;
 
+  // Während Drag: visuell verschieben / verbreitern über extra styles
+  // (wir lassen left/width in % stehen und arbeiten additiv mit Pixeln).
+  let dragWrapperStyle: React.CSSProperties = {};
+  if (drag) {
+    if (drag.type === "move") {
+      dragWrapperStyle = {
+        transform: `translate(${dragPxDelta}px, -50%)`,
+      };
+    } else if (drag.type === "resize-end") {
+      dragWrapperStyle = {
+        // Breite additiv anpassen über calc; left bleibt gleich
+        width: `calc(${safeWidth} + ${dragPxDelta}px)`,
+      };
+    } else if (drag.type === "resize-start") {
+      // links rein / raus: left anpassen und Breite gegengleich
+      dragWrapperStyle = {
+        left: `calc(${left} + ${dragPxDelta}px)`,
+        width: `calc(${safeWidth} - ${dragPxDelta}px)`,
+      };
+    }
+  }
+
   return (
     <>
-      <button
-        type="button"
-        onClick={onClick}
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
-        className={`absolute top-1/2 -translate-y-1/2 rounded-md overflow-hidden text-left transition-all hover:brightness-110 hover:shadow-md ${
+      {/* Wrapper für den Balken — Click-Layer + Resize-Handles */}
+      <div
+        className={`absolute top-1/2 rounded-md overflow-visible ${
           item.isDelayed ? "ring-1 ring-red-400" : ""
         }`}
         style={{
@@ -126,47 +363,92 @@ export default function GanttBar({
           width: safeWidth,
           height: 20,
           transform: "translateY(-50%)",
+          opacity: drag ? 0.7 : 1,
+          ...dragWrapperStyle,
+          zIndex: drag ? 15 : "auto",
         }}
-        aria-label={item.name}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
       >
-        {/* Background */}
-        <span
-          className={`absolute inset-0 ${
-            item.isDelayed ? "bg-red-100" : `bg-${color}-100`
+        {/* Haupt-Button: Click + Move-Drag */}
+        <button
+          type="button"
+          onClick={drag ? undefined : onClick}
+          onMouseDown={canMove ? (e) => startDrag("move", e) : undefined}
+          className={`absolute inset-0 rounded-md overflow-hidden text-left transition-[filter] hover:brightness-110 hover:shadow-md ${
+            canMove
+              ? drag && drag.type === "move"
+                ? "cursor-grabbing"
+                : "cursor-grab"
+              : ""
           }`}
-        />
-        {/* Progress fill */}
-        <span
-          className={`absolute inset-y-0 left-0 ${
-            item.isDelayed ? "bg-red-500" : `bg-${color}-600`
-          } opacity-80`}
-          style={{ width: `${Math.max(0, Math.min(100, item.progress))}%` }}
-        />
-        {/* Outline */}
-        <span
-          className={`absolute inset-0 rounded-md border ${
-            item.isDelayed ? "border-red-400" : `border-${color}-500`
-          } opacity-60 pointer-events-none`}
-        />
-        {/* Label */}
-        {!isTiny && (
-          <span className="absolute inset-0 flex items-center px-2">
-            <span
-              className={`text-[10px] font-medium truncate ${
-                item.progress > 40 ? "text-white drop-shadow" : `text-${color}-700`
-              }`}
-            >
-              {item.name}
+          aria-label={item.name}
+        >
+          {/* Background */}
+          <span
+            className={`absolute inset-0 ${
+              item.isDelayed ? "bg-red-100" : `bg-${color}-100`
+            }`}
+          />
+          {/* Progress fill */}
+          <span
+            className={`absolute inset-y-0 left-0 ${
+              item.isDelayed ? "bg-red-500" : `bg-${color}-600`
+            } opacity-80`}
+            style={{ width: `${Math.max(0, Math.min(100, item.progress))}%` }}
+          />
+          {/* Outline */}
+          <span
+            className={`absolute inset-0 rounded-md border ${
+              item.isDelayed ? "border-red-400" : `border-${color}-500`
+            } opacity-60 pointer-events-none`}
+          />
+          {/* Label */}
+          {!isTiny && (
+            <span className="absolute inset-0 flex items-center px-2 pointer-events-none">
+              <span
+                className={`text-[10px] font-medium truncate ${
+                  item.progress > 40
+                    ? "text-white drop-shadow"
+                    : `text-${color}-700`
+                }`}
+              >
+                {item.name}
+              </span>
             </span>
-          </span>
+          )}
+        </button>
+
+        {/* Resize-Handle LEFT */}
+        {canResize && (
+          <div
+            onMouseDown={(e) => startDrag("resize-start", e)}
+            className="absolute top-0 bottom-0 left-0 w-1 cursor-ew-resize z-10 hover:bg-black/20"
+            aria-label="Startdatum verschieben"
+            role="separator"
+          />
         )}
-      </button>
-      {hovered && (
+        {/* Resize-Handle RIGHT */}
+        {canResize && (
+          <div
+            onMouseDown={(e) => startDrag("resize-end", e)}
+            className="absolute top-0 bottom-0 right-0 w-1 cursor-ew-resize z-10 hover:bg-black/20"
+            aria-label="Enddatum verschieben"
+            role="separator"
+          />
+        )}
+      </div>
+
+      {(hovered || drag) && (
         <BarTooltip
           item={item}
           tradeCategory={tradeCategory}
           color={color}
           leftPercent={leftPercent}
+          previewStart={previewStart}
+          previewEnd={previewEnd}
+          dragType={drag?.type}
+          shift={drag?.shift ?? false}
         />
       )}
     </>
@@ -180,11 +462,28 @@ interface BarTooltipProps {
   tradeCategory: TradeCategoryDTO | undefined;
   color: TerminplanColor;
   leftPercent: number;
+  previewStart?: Date | null;
+  previewEnd?: Date | null;
+  dragType?: DragType;
+  shift?: boolean;
 }
 
-function BarTooltip({ item, tradeCategory, color, leftPercent }: BarTooltipProps) {
+function BarTooltip({
+  item,
+  tradeCategory,
+  color,
+  leftPercent,
+  previewStart,
+  previewEnd,
+  dragType,
+  shift,
+}: BarTooltipProps) {
   // Tooltip rechts vom Balken, außer am Ende → dann links
   const placeLeft = leftPercent > 70;
+  const displayStart = previewStart ?? new Date(item.startDate);
+  const displayEnd = previewEnd ?? new Date(item.endDate);
+  const isDragging = dragType !== undefined;
+
   return (
     <div
       className={`absolute bottom-full mb-2 z-40 pointer-events-none bg-gray-900 text-white text-xs rounded-lg shadow-lg px-3 py-2 min-w-[220px] max-w-[320px] ${
@@ -200,27 +499,49 @@ function BarTooltip({ item, tradeCategory, color, leftPercent }: BarTooltipProps
       <div className="space-y-0.5 text-gray-300 leading-snug">
         <div>
           <span className="text-gray-400">Start:</span>{" "}
-          {formatDateFull(new Date(item.startDate))}
+          {formatDateFull(displayStart)}
           <span className="text-gray-400 ml-2">Ende:</span>{" "}
-          {formatDateFull(new Date(item.endDate))}
+          {formatDateFull(displayEnd)}
         </div>
-        <div>
-          <span className="text-gray-400">Dauer:</span> {item.durationWorkdays}{" "}
-          Arbeitstage
-        </div>
-        <div>
-          <span className="text-gray-400">Fortschritt:</span> {item.progress} %
-        </div>
-        <div>
-          <span className="text-gray-400">Status:</span>{" "}
-          {STATUS_LABEL[item.status]}
-          {item.isDelayed && (
-            <span className="ml-2 text-red-300 font-medium">Verspätet</span>
-          )}
-        </div>
-        {tradeCategory && (
-          <div>
-            <span className="text-gray-400">Gewerk:</span> {tradeCategory.name}
+        {!isDragging && (
+          <>
+            <div>
+              <span className="text-gray-400">Dauer:</span>{" "}
+              {item.durationWorkdays} Arbeitstage
+            </div>
+            <div>
+              <span className="text-gray-400">Fortschritt:</span> {item.progress}{" "}
+              %
+            </div>
+            <div>
+              <span className="text-gray-400">Status:</span>{" "}
+              {STATUS_LABEL[item.status]}
+              {item.isDelayed && (
+                <span className="ml-2 text-red-300 font-medium">Verspätet</span>
+              )}
+            </div>
+            {tradeCategory && (
+              <div>
+                <span className="text-gray-400">Gewerk:</span>{" "}
+                {tradeCategory.name}
+              </div>
+            )}
+          </>
+        )}
+        {isDragging && (
+          <div className="pt-1 mt-1 border-t border-gray-700">
+            <div className="text-[10px] text-amber-300">
+              {dragType === "move"
+                ? shift
+                  ? "Verschieben (Shift = Nachfolger mit)"
+                  : "Verschieben — Shift = Nachfolger mitnehmen"
+                : dragType === "resize-start"
+                  ? "Startdatum ziehen"
+                  : "Enddatum ziehen"}
+            </div>
+            <div className="text-[10px] text-gray-400">
+              Esc bricht ab
+            </div>
           </div>
         )}
       </div>

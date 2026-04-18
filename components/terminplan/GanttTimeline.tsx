@@ -6,7 +6,7 @@
 //  - Heute-Linie
 //  - Dependency-Layer (SVG)
 
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import type {
   ScheduleDependencyDTO,
   ScheduleItemDTO,

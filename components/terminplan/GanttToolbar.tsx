@@ -10,6 +10,8 @@ import {
   ListTree,
   GanttChart as GanttIcon,
   Check,
+  ChevronsDownUp,
+  ChevronsUpDown,
 } from "lucide-react";
 import type { TradeCategoryDTO } from "@/lib/terminplan/types";
 import type { GanttView, ZoomLevel } from "./types";
@@ -26,6 +28,8 @@ interface GanttToolbarProps {
   onResetTrades: () => void;
   canEdit: boolean;
   onAddClick: () => void;
+  onExpandAll?: () => void;
+  onCollapseAll?: () => void;
 }
 
 const ZOOM_LEVELS: { value: ZoomLevel; label: string }[] = [
@@ -45,6 +49,8 @@ export default function GanttToolbar({
   onResetTrades,
   canEdit,
   onAddClick,
+  onExpandAll,
+  onCollapseAll,
 }: GanttToolbarProps) {
   const [filterOpen, setFilterOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement | null>(null);
@@ -86,6 +92,32 @@ export default function GanttToolbar({
           <Plus className="w-3.5 h-3.5" />
           Arbeitspaket
         </button>
+      )}
+
+      {/* Expand/Collapse All */}
+      {(onExpandAll || onCollapseAll) && (
+        <div className="flex items-center gap-0.5 ml-2">
+          {onExpandAll && (
+            <button
+              type="button"
+              onClick={onExpandAll}
+              title="Alle aufklappen"
+              className="p-1.5 text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded-md transition-colors"
+            >
+              <ChevronsUpDown className="w-4 h-4" />
+            </button>
+          )}
+          {onCollapseAll && (
+            <button
+              type="button"
+              onClick={onCollapseAll}
+              title="Alle zuklappen"
+              className="p-1.5 text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded-md transition-colors"
+            >
+              <ChevronsDownUp className="w-4 h-4" />
+            </button>
+          )}
+        </div>
       )}
 
       <div className="flex-1" />

@@ -35,7 +35,7 @@ interface GanttChartProps {
 
 const HEADER_HEIGHT = 56;
 const ROW_HEIGHT = 40;
-const TABLE_WIDTH = 600;
+const TABLE_WIDTH = 720;
 
 // Pixel pro Tag je nach Zoom-Stufe (initialer Richtwert — Timeline wird
 // aber auf mindestens diese Breite gestreckt).
