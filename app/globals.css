@@ -1,0 +1,217 @@
+@import "tailwindcss";
+
+/* ─── Dark-Mode-Variante ──────────────────────────────────────────────────
+   Wir nutzen class-basiertes Dark Mode (html.dark). Ein ".light"-Ancestor
+   hebelt den Dark-Mode für seinen Teilbaum wieder aus — brauchen wir für
+   Surfaces, die laut Produktregel immer hell bleiben (Login, Extern-Portal,
+   PDF-Export, Druck). */
+@custom-variant dark (&:where(.dark, .dark *):not(:where(.light, .light *)));
+
+:root {
+  --sidebar-bg: #1a1d23;
+  --sidebar-hover: #2a2d35;
+  --sidebar-active: #2a2d35;
+  --sidebar-icon: #6b7280;
+  --sidebar-icon-active: #ffffff;
+  --topnav-bg: #ffffff;
+  --topnav-border: #e5e7eb;
+  --tab-active: #2563eb;
+  --tab-active-text: #2563eb;
+}
+
+/* Dark-Mode-Tokens */
+html.dark {
+  --sidebar-bg: #05070c;
+  --sidebar-hover: #12161f;
+  --sidebar-active: #12161f;
+  --sidebar-icon: #6b7280;
+  --sidebar-icon-active: #ffffff;
+  --topnav-bg: rgba(255, 255, 255, 0.035);
+  --topnav-border: rgba(255, 255, 255, 0.08);
+  --tab-active: #3b82f6;
+  --tab-active-text: #93c5fd;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: #f9fafb;
+  color: #111827;
+}
+html.dark body {
+  background: #07090e;
+  color: #eaeaf0;
+}
+html.dark .light {
+  background: #f9fafb;
+  color: #111827;
+}
+
+/* Druck immer hell */
+@media print {
+  html.dark,
+  html.dark body {
+    background: #ffffff !important;
+    color: #111827 !important;
+  }
+  html.dark * {
+    background-color: initial;
+    color: initial;
+    border-color: initial;
+  }
+}
+
+/* ─── Globale Dark-Mode-Fallbacks ───────────────────────────────────────
+   WICHTIG: Dieser Block ist UNLAYERED (nicht in @layer components/utilities),
+   damit er in Tailwind v4 gegen die Utility-Layer gewinnt. */
+
+/* ─── Neutrale Flächen: Glass-Stil ─── */
+html.dark .bg-white:not(:where(.light, .light *)) {
+  background-color: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+html.dark .bg-gray-50:not(:where(.light, .light *)),
+html.dark .bg-slate-50:not(:where(.light, .light *)) {
+  background-color: rgba(255, 255, 255, 0.02);
+}
+html.dark .bg-gray-100:not(:where(.light, .light *)),
+html.dark .bg-slate-100:not(:where(.light, .light *)) {
+  background-color: rgba(255, 255, 255, 0.06);
+}
+html.dark .bg-gray-200:not(:where(.light, .light *)),
+html.dark .bg-slate-200:not(:where(.light, .light *)) {
+  background-color: rgba(255, 255, 255, 0.09);
+}
+
+/* ─── Text ─── */
+html.dark .text-gray-900:not(:where(.light, .light *)),
+html.dark .text-slate-900:not(:where(.light, .light *)),
+html.dark .text-black:not(:where(.light, .light *)) { color: #f4f5f8; }
+html.dark .text-gray-800:not(:where(.light, .light *)),
+html.dark .text-slate-800:not(:where(.light, .light *)) { color: #e8e9ee; }
+html.dark .text-gray-700:not(:where(.light, .light *)),
+html.dark .text-slate-700:not(:where(.light, .light *)) { color: #d5d6dc; }
+html.dark .text-gray-600:not(:where(.light, .light *)),
+html.dark .text-slate-600:not(:where(.light, .light *)) { color: #a6a7ae; }
+html.dark .text-gray-500:not(:where(.light, .light *)),
+html.dark .text-slate-500:not(:where(.light, .light *)) { color: #8a8b92; }
+html.dark .text-gray-400:not(:where(.light, .light *)),
+html.dark .text-slate-400:not(:where(.light, .light *)) { color: #6c6d74; }
+html.dark .text-gray-300:not(:where(.light, .light *)),
+html.dark .text-slate-300:not(:where(.light, .light *)) { color: #85868e; }
+html.dark .text-gray-200:not(:where(.light, .light *)) { color: #3d3e44; }
+
+/* ─── Rahmen ─── */
+html.dark .border-gray-100:not(:where(.light, .light *)),
+html.dark .border-slate-100:not(:where(.light, .light *)) { border-color: rgba(255, 255, 255, 0.05); }
+html.dark .border-gray-200:not(:where(.light, .light *)),
+html.dark .border-slate-200:not(:where(.light, .light *)) { border-color: rgba(255, 255, 255, 0.08); }
+html.dark .border-gray-300:not(:where(.light, .light *)),
+html.dark .border-slate-300:not(:where(.light, .light *)) { border-color: rgba(255, 255, 255, 0.12); }
+html.dark .divide-gray-100:not(:where(.light, .light *)) > :not([hidden]) ~ :not([hidden]) { border-color: rgba(255, 255, 255, 0.05); }
+html.dark .divide-gray-200:not(:where(.light, .light *)) > :not([hidden]) ~ :not([hidden]) { border-color: rgba(255, 255, 255, 0.08); }
+
+/* ─── Hover-States ─── */
+html.dark .hover\:bg-gray-50:hover:not(:where(.light, .light *)),
+html.dark .hover\:bg-slate-50:hover:not(:where(.light, .light *)) { background-color: rgba(255, 255, 255, 0.04); }
+html.dark .hover\:bg-gray-100:hover:not(:where(.light, .light *)),
+html.dark .hover\:bg-slate-100:hover:not(:where(.light, .light *)) { background-color: rgba(255, 255, 255, 0.08); }
+html.dark .hover\:bg-gray-200:hover:not(:where(.light, .light *)) { background-color: rgba(255, 255, 255, 0.12); }
+html.dark .hover\:border-gray-200:hover:not(:where(.light, .light *)) { border-color: rgba(255, 255, 255, 0.12); }
+html.dark .hover\:border-gray-300:hover:not(:where(.light, .light *)) { border-color: rgba(255, 255, 255, 0.18); }
+
+/* ─── Semantische Akzente (Pastel → halbtransparenter Akzent) ─── */
+html.dark .bg-blue-50:not(:where(.light, .light *))   { background-color: color-mix(in srgb, #3b82f6 14%, transparent); }
+html.dark .bg-blue-100:not(:where(.light, .light *))  { background-color: color-mix(in srgb, #3b82f6 22%, transparent); }
+html.dark .bg-indigo-50:not(:where(.light, .light *)) { background-color: color-mix(in srgb, #6366f1 14%, transparent); }
+html.dark .bg-indigo-100:not(:where(.light, .light *)){ background-color: color-mix(in srgb, #6366f1 22%, transparent); }
+html.dark .bg-red-50:not(:where(.light, .light *))    { background-color: color-mix(in srgb, #ef4444 14%, transparent); }
+html.dark .bg-red-100:not(:where(.light, .light *))   { background-color: color-mix(in srgb, #ef4444 22%, transparent); }
+html.dark .bg-orange-50:not(:where(.light, .light *)) { background-color: color-mix(in srgb, #f97316 14%, transparent); }
+html.dark .bg-orange-100:not(:where(.light, .light *)){ background-color: color-mix(in srgb, #f97316 22%, transparent); }
+html.dark .bg-amber-50:not(:where(.light, .light *))  { background-color: color-mix(in srgb, #f59e0b 14%, transparent); }
+html.dark .bg-amber-100:not(:where(.light, .light *)) { background-color: color-mix(in srgb, #f59e0b 22%, transparent); }
+html.dark .bg-green-50:not(:where(.light, .light *))  { background-color: color-mix(in srgb, #22c55e 14%, transparent); }
+html.dark .bg-green-100:not(:where(.light, .light *)) { background-color: color-mix(in srgb, #22c55e 22%, transparent); }
+html.dark .bg-emerald-50:not(:where(.light, .light *)){ background-color: color-mix(in srgb, #10b981 14%, transparent); }
+html.dark .bg-emerald-100:not(:where(.light, .light *)) { background-color: color-mix(in srgb, #10b981 22%, transparent); }
+html.dark .bg-teal-50:not(:where(.light, .light *))   { background-color: color-mix(in srgb, #14b8a6 14%, transparent); }
+html.dark .bg-teal-100:not(:where(.light, .light *))  { background-color: color-mix(in srgb, #14b8a6 22%, transparent); }
+html.dark .bg-purple-50:not(:where(.light, .light *)) { background-color: color-mix(in srgb, #a855f7 14%, transparent); }
+html.dark .bg-purple-100:not(:where(.light, .light *)){ background-color: color-mix(in srgb, #a855f7 22%, transparent); }
+html.dark .bg-cyan-50:not(:where(.light, .light *))   { background-color: color-mix(in srgb, #06b6d4 14%, transparent); }
+
+/* ─── Akzent-Rahmen ─── */
+html.dark .border-blue-100:not(:where(.light, .light *)),
+html.dark .border-blue-200:not(:where(.light, .light *))    { border-color: color-mix(in srgb, #3b82f6 35%, transparent); }
+html.dark .border-green-100:not(:where(.light, .light *)),
+html.dark .border-green-200:not(:where(.light, .light *))   { border-color: color-mix(in srgb, #22c55e 35%, transparent); }
+html.dark .border-emerald-100:not(:where(.light, .light *)),
+html.dark .border-emerald-200:not(:where(.light, .light *)) { border-color: color-mix(in srgb, #10b981 35%, transparent); }
+html.dark .border-red-100:not(:where(.light, .light *)),
+html.dark .border-red-200:not(:where(.light, .light *))     { border-color: color-mix(in srgb, #ef4444 35%, transparent); }
+html.dark .border-amber-100:not(:where(.light, .light *)),
+html.dark .border-amber-200:not(:where(.light, .light *))   { border-color: color-mix(in srgb, #f59e0b 35%, transparent); }
+
+/* ─── Akzent-Text ─── */
+html.dark .text-blue-600:not(:where(.light, .light *))   { color: #7dafff; }
+html.dark .text-blue-700:not(:where(.light, .light *))   { color: #60a5fa; }
+html.dark .text-green-600:not(:where(.light, .light *))  { color: #6ee7a6; }
+html.dark .text-emerald-600:not(:where(.light, .light *)){ color: #5fe5c0; }
+html.dark .text-emerald-700:not(:where(.light, .light *)){ color: #34d399; }
+html.dark .text-amber-600:not(:where(.light, .light *))  { color: #fcd34d; }
+html.dark .text-amber-700:not(:where(.light, .light *))  { color: #fbbf24; }
+html.dark .text-orange-600:not(:where(.light, .light *)) { color: #fdba74; }
+html.dark .text-red-600:not(:where(.light, .light *))    { color: #fca5a5; }
+html.dark .text-red-700:not(:where(.light, .light *))    { color: #f87171; }
+html.dark .text-purple-600:not(:where(.light, .light *)) { color: #d8b4fe; }
+html.dark .text-indigo-600:not(:where(.light, .light *)) { color: #a5b4fc; }
+html.dark .text-teal-600:not(:where(.light, .light *))   { color: #5eead4; }
+
+/* ─── Shadow ─── */
+html.dark .shadow:not(:where(.light, .light *)),
+html.dark .shadow-sm:not(:where(.light, .light *)),
+html.dark .shadow-md:not(:where(.light, .light *)) {
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.45);
+}
+html.dark .shadow-lg:not(:where(.light, .light *)) {
+  box-shadow: 0 10px 20px -6px rgb(0 0 0 / 0.55);
+}
+html.dark .shadow-xl:not(:where(.light, .light *)),
+html.dark .shadow-2xl:not(:where(.light, .light *)) {
+  box-shadow: 0 20px 40px -10px rgb(0 0 0 / 0.65);
+}
+
+/* ─── Backdrop für Modale ─── */
+html.dark .bg-black\/20:not(:where(.light, .light *)) { background-color: rgb(0 0 0 / 0.65); }
+html.dark .bg-black\/30:not(:where(.light, .light *)) { background-color: rgb(0 0 0 / 0.7); }
+html.dark .bg-black\/40:not(:where(.light, .light *)) { background-color: rgb(0 0 0 / 0.75); }
+
+/* ─── Pastel-Gradient Blanket ─── */
+html.dark [class*="bg-gradient-to"][class*="from-blue-50"]:not(:where(.light, .light *)),
+html.dark [class*="bg-gradient-to"][class*="from-indigo-50"]:not(:where(.light, .light *)),
+html.dark [class*="bg-gradient-to"][class*="from-emerald-50"]:not(:where(.light, .light *)),
+html.dark [class*="bg-gradient-to"][class*="from-gray-50"]:not(:where(.light, .light *)),
+html.dark [class*="bg-gradient-to"][class*="from-slate-50"]:not(:where(.light, .light *)) {
+  background-image: none;
+  background-color: rgba(255, 255, 255, 0.035);
+}
+
+/* ─── Hover-Text ─── */
+html.dark .hover\:text-gray-700:hover:not(:where(.light, .light *)) { color: #e2e3e8; }
+html.dark .hover\:text-gray-600:hover:not(:where(.light, .light *)) { color: #cfd0d5; }
+html.dark .hover\:text-gray-900:hover:not(:where(.light, .light *)) { color: #ffffff; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+html.dark ::-webkit-scrollbar-thumb { background: #2d3442; }
+html.dark ::-webkit-scrollbar-thumb:hover { background: #3b4454; }
+
+@layer base {
+  textarea {
+    resize: vertical;
+  }
+}

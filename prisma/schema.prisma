@@ -1,0 +1,61 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── APOS Minimal-Schema ──────────────────────────────────────────────────────
+// Stand: Extraktion aus Monorepo. Wird mit echten APOS-Models erweitert.
+// TODO(apos): Dieses Schema ist ein Ausgangspunkt. Die vollständigen Models
+//             (AposProject, AposWorkPackage, etc.) aus dem Monorepo-Schema
+//             in packages/database/prisma/schema.prisma übernehmen sobald
+//             die eigene DB provisioniert wird.
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  password  String?
+  role      String   @default("EMPLOYEE")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Projects this user manages
+  managedProjects Project[] @relation("ProjectManager")
+}
+
+model Organization {
+  id        String    @id @default(cuid())
+  name      String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  projects  Project[]
+}
+
+model Project {
+  id             String       @id @default(cuid())
+  name           String
+  projectNumber  String       @unique
+  description    String?
+  status         String       @default("PLANNING")
+  clientName     String?
+  address        String?
+  budget         Float?
+  startDate      DateTime?
+  endDate        DateTime?
+  organizationId String
+  managerId      String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  manager        User         @relation("ProjectManager", fields: [managerId], references: [id])
+
+  // TODO(apos): Extend with sub-models: WorkPackage, ScheduleItem, Risk,
+  //             BudgetItem, Procurement, Stakeholder, Decision, HandoverProtocol,
+  //             VobItem, CommunicationLog, Document
+}
