@@ -31,6 +31,8 @@ import type { GanttView, TimelineContext, ZoomLevel } from "./types";
 interface GanttChartProps {
   projectId: string;
   canEdit: boolean;
+  /** Wenn true: nimmt die volle Höhe des Parent-Containers (für Fullscreen). */
+  fullHeight?: boolean;
 }
 
 const HEADER_HEIGHT = 56;
@@ -45,7 +47,7 @@ const PX_PER_DAY: Record<ZoomLevel, number> = {
   MONTH: 5,
 };
 
-export default function GanttChart({ projectId, canEdit }: GanttChartProps) {
+export default function GanttChart({ projectId, canEdit, fullHeight }: GanttChartProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<TerminplanResponseDTO | null>(null);
@@ -304,6 +306,119 @@ export default function GanttChart({ projectId, canEdit }: GanttChartProps) {
     toast({ title: "Aktualisiert", variant: "success" });
   }
 
+  // --- Drag & Drop: Commit-Handler ---
+  // Wird vom GanttBar beim Loslassen aufgerufen. Wir aktualisieren den State
+  // optimistisch (damit der Balken sofort an der neuen Stelle sitzt), feuern
+  // den PATCH (oder POST /move bei Cascade) und rollen bei Fehler zurück.
+  const handleCommitMove = useCallback(
+    async (
+      itemId: string,
+      newStart: string,
+      newEnd: string,
+      options?: { cascade?: boolean },
+    ): Promise<void> => {
+      if (!data) return;
+
+      // Original-Item für Rollback merken
+      const original = data.items.find((it) => it.id === itemId);
+      if (!original) return;
+
+      // ISO-Strings aus YYYY-MM-DD (lokal Mitternacht → ISO)
+      const toIso = (ymd: string): string => {
+        const parts = ymd.split("-");
+        const y = Number(parts[0]);
+        const m = Number(parts[1]);
+        const d = Number(parts[2]);
+        const dt = new Date(y, (m ?? 1) - 1, d ?? 1, 0, 0, 0, 0);
+        return dt.toISOString();
+      };
+
+      // Optimistisches Update
+      setData((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          items: prev.items.map((it) =>
+            it.id === itemId
+              ? { ...it, startDate: toIso(newStart), endDate: toIso(newEnd) }
+              : it,
+          ),
+        };
+      });
+
+      try {
+        const res = await fetch(
+          `/api/projekte/${projectId}/terminplan/${itemId}`,
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ startDate: newStart, endDate: newEnd }),
+          },
+        );
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          const msg =
+            typeof body === "object" &&
+            body !== null &&
+            "error" in body &&
+            typeof (body as { error: unknown }).error === "string"
+              ? (body as { error: string }).error
+              : `Fehler ${res.status}`;
+          throw new Error(msg);
+        }
+
+        // Bei Cascade zusätzlich alle Nachfolger über move-Endpoint verschieben.
+        // Wir berechnen das delta in Kalendertagen zwischen alt und neu-Start.
+        // (Der move-Endpoint erwartet Arbeitstage — für Cascade reichen hier
+        //  auch Arbeitstag-Deltas, siehe /move-Route. Wir liefern Kalendertage
+        //  als Näherung, da frontseitig keine Feiertagsliste vorliegt.)
+        if (options?.cascade) {
+          const oldStart = new Date(original.startDate);
+          const newStartDt = new Date(toIso(newStart));
+          const deltaDays = Math.round(
+            (newStartDt.getTime() - oldStart.getTime()) / 86_400_000,
+          );
+          if (deltaDays !== 0) {
+            await fetch(
+              `/api/projekte/${projectId}/terminplan/${itemId}/move`,
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  deltaWorkdays: deltaDays,
+                  cascade: true,
+                }),
+              },
+            ).catch(() => undefined);
+          }
+        }
+
+        toast({ title: "Termin angepasst", variant: "success" });
+        // Full-Refetch, um abgeleitete Felder (wbsCode, durationWorkdays,
+        // isDelayed, ggf. Cascade-Nachzüge) konsistent zu bekommen.
+        await fetchData();
+      } catch (err) {
+        // Rollback
+        setData((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            items: prev.items.map((it) =>
+              it.id === itemId ? original : it,
+            ),
+          };
+        });
+        const msg = err instanceof Error ? err.message : "Unbekannter Fehler";
+        toast({
+          title: "Verschieben fehlgeschlagen",
+          description: msg,
+          variant: "error",
+        });
+      }
+    },
+    [data, fetchData, projectId, toast],
+  );
+
   // --- Render ---
 
   if (loading) {
@@ -380,7 +495,7 @@ export default function GanttChart({ projectId, canEdit }: GanttChartProps) {
              */
             <div
               className="overflow-auto"
-              style={{ height: "calc(100vh - 360px)", minHeight: 400 }}
+              style={{ height: fullHeight ? "100%" : "calc(100vh - 360px)", minHeight: 400 }}
             >
               <div
                 className="flex"
@@ -415,6 +530,8 @@ export default function GanttChart({ projectId, canEdit }: GanttChartProps) {
                     timelineCtx={timelineCtx}
                     headerHeight={HEADER_HEIGHT}
                     onEditItem={openEditItem}
+                    canEdit={canEdit}
+                    onCommitMove={handleCommitMove}
                   />
                 </div>
               </div>
@@ -423,7 +540,7 @@ export default function GanttChart({ projectId, canEdit }: GanttChartProps) {
             /* Listen-Ansicht: nur Tabelle, volle Breite */
             <div
               className="overflow-auto"
-              style={{ maxHeight: "calc(100vh - 360px)" }}
+              style={{ maxHeight: fullHeight ? "100%" : "calc(100vh - 360px)" }}
             >
               <GanttTable
                 visibleItems={visibleItems}

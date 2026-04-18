@@ -73,6 +73,16 @@ export default function GanttBar({
   const latestClientXRef = useRef<number>(0);
   const latestShiftRef = useRef<boolean>(false);
 
+  // Verhindert dass nach einem Drag das onClick-Event noch das Modal öffnet.
+  // Wird nach mouseup auf true gesetzt und nach 250ms wieder freigegeben.
+  const justDraggedRef = useRef<boolean>(false);
+
+  // Wrapper für onClick: blockt wenn gerade gedragged wurde.
+  const handleClick = useCallback(() => {
+    if (justDraggedRef.current) return;
+    onClick();
+  }, [onClick]);
+
   // Farbe: item.color (Override) > tradeCategory.color > "blue"
   const color: TerminplanColor = safeColor(item.color ?? tradeCategory?.color);
 
@@ -132,6 +142,14 @@ export default function GanttBar({
     (commit: boolean) => {
       setDrag((prev) => {
         if (!prev) return null;
+        // Wenn tatsächlich bewegt: Click-Event der nächsten 250ms unterdrücken,
+        // damit nach Drag nicht versehentlich das Modal aufgeht.
+        if (Math.abs(prev.deltaDays) > 0) {
+          justDraggedRef.current = true;
+          window.setTimeout(() => {
+            justDraggedRef.current = false;
+          }, 250);
+        }
         if (commit) commitDrag(prev);
         return null;
       });
@@ -250,7 +268,7 @@ export default function GanttBar({
       <>
         <button
           type="button"
-          onClick={drag ? undefined : onClick}
+          onClick={drag ? undefined : handleClick}
           onMouseEnter={() => setHovered(true)}
           onMouseLeave={() => setHovered(false)}
           onMouseDown={canMove ? (e) => startDrag("move", e) : undefined}
@@ -373,7 +391,7 @@ export default function GanttBar({
         {/* Haupt-Button: Click + Move-Drag */}
         <button
           type="button"
-          onClick={drag ? undefined : onClick}
+          onClick={drag ? undefined : handleClick}
           onMouseDown={canMove ? (e) => startDrag("move", e) : undefined}
           className={`absolute inset-0 rounded-md overflow-hidden text-left transition-[filter] hover:brightness-110 hover:shadow-md ${
             canMove

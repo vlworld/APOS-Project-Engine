@@ -6,7 +6,8 @@
 // Ergänzt um Fullscreen-Modus: verdeckt Sidebar + Header beim Klick.
 
 import { useEffect, useState } from "react";
-import { Calendar, GanttChart as GanttIcon, Maximize2, Minimize2 } from "lucide-react";
+import { Calendar, GanttChart as GanttIcon, Maximize2, Minimize2, FileDown } from "lucide-react";
+import { useToast } from "@/components/ui/Toast";
 import CalendarView from "@/components/terminplan/CalendarView";
 import GanttChart from "@/components/terminplan/GanttChart";
 
@@ -30,6 +31,22 @@ export default function TerminplanTabs({
   const [view, setView] = useState<TerminplanView>("gantt");
   const [hydrated, setHydrated] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
+  const { toast } = useToast();
+
+  function handlePdfExport() {
+    toast({
+      title: "PDF-Export wird vorbereitet",
+      description: "Im Drucker-Dialog 'Als PDF speichern' wählen.",
+      variant: "info",
+    });
+    // Kleiner Delay, damit der Toast erst angezeigt wird und der Layout-
+    // apos-printing-Modus greifen kann.
+    document.body.classList.add("apos-printing");
+    setTimeout(() => {
+      window.print();
+      document.body.classList.remove("apos-printing");
+    }, 200);
+  }
 
   useEffect(() => {
     try {
@@ -101,30 +118,41 @@ export default function TerminplanTabs({
           })}
         </div>
 
-        <button
-          type="button"
-          onClick={() => setFullscreen((v) => !v)}
-          title={fullscreen ? "Vollbild verlassen (Esc)" : "Vollbild"}
-          className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-        >
-          {fullscreen ? (
-            <>
-              <Minimize2 className="w-4 h-4" />
-              Verlassen
-            </>
-          ) : (
-            <>
-              <Maximize2 className="w-4 h-4" />
-              Vollbild
-            </>
-          )}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handlePdfExport}
+            title="Als PDF exportieren"
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            <FileDown className="w-4 h-4" />
+            <span className="hidden sm:inline">PDF</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setFullscreen((v) => !v)}
+            title={fullscreen ? "Vollbild verlassen (Esc)" : "Vollbild"}
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            {fullscreen ? (
+              <>
+                <Minimize2 className="w-4 h-4" />
+                <span className="hidden sm:inline">Verlassen</span>
+              </>
+            ) : (
+              <>
+                <Maximize2 className="w-4 h-4" />
+                <span className="hidden sm:inline">Vollbild</span>
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* Aktive View */}
-      <div>
+      <div className={fullscreen ? "flex-1 min-h-0" : ""}>
         {view === "gantt" ? (
-          <GanttChart projectId={projectId} canEdit={canEdit} />
+          <GanttChart projectId={projectId} canEdit={canEdit} fullHeight={fullscreen} />
         ) : (
           <CalendarView projectId={projectId} canEdit={canEdit} />
         )}
@@ -133,11 +161,11 @@ export default function TerminplanTabs({
   );
 
   if (fullscreen) {
-    // Fullscreen-Modus: Sidebar + Header weiterhin sichtbar (fixed),
-    // aber wir legen uns darüber. Wenn du auch Sidebar/Header verstecken
-    // willst, setze inset-0 statt top-14 left-14.
     return (
-      <div className="fixed inset-0 z-[60] bg-gray-50 flex flex-col gap-3 p-4 overflow-auto">
+      <div
+        className="fixed inset-0 z-[60] bg-gray-50 flex flex-col gap-3 p-4"
+        data-apos-fullscreen
+      >
         {content}
       </div>
     );

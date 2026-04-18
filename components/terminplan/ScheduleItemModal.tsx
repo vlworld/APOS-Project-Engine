@@ -19,6 +19,16 @@ import {
   safeColor,
 } from "./TailwindColorSafelist";
 
+// Kuratierte Auswahl für den Color-Picker (Untermenge der TERMINPLAN_COLORS).
+// Voller Satz bleibt für Gewerke verfügbar; im Item-Override reicht die Auswahl.
+const PALETTE_COLORS = [
+  "slate", "blue", "cyan", "teal", "emerald",
+  "lime", "amber", "orange", "red", "rose",
+  "violet", "fuchsia",
+] as const;
+// Damit TS-Strict gegen TERMINPLAN_COLORS-Typ matcht
+void TERMINPLAN_COLORS;
+
 interface ProjectMember {
   id: string;
   name: string | null;
@@ -415,7 +425,7 @@ export default function ScheduleItemModal({
             </div>
           </div>
 
-          {/* Farb-Override */}
+          {/* Farb-Override — kuratierte Palette (12 Farben + „Kein Override"). */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1.5">
               <Palette className="w-3.5 h-3.5 text-gray-400" />
@@ -424,27 +434,27 @@ export default function ScheduleItemModal({
                 (optional; überschreibt die Gewerk-Farbe)
               </span>
             </label>
-            <div className="grid grid-cols-11 gap-1.5">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 onClick={() => setForm((f) => ({ ...f, color: "" }))}
-                className={`w-7 h-7 rounded-full border-2 bg-white flex items-center justify-center text-[10px] text-gray-500 transition-all ${
+                className={`w-7 h-7 rounded-full border-2 bg-white flex items-center justify-center text-[11px] text-gray-500 transition-all shrink-0 ${
                   form.color === ""
                     ? "ring-2 ring-offset-1 ring-gray-900 border-gray-400"
                     : "border-gray-200 hover:border-gray-400"
                 }`}
-                title="Keine Override"
+                title="Keine Override (Gewerk-Farbe verwenden)"
               >
                 ×
               </button>
-              {TERMINPLAN_COLORS.map((c) => {
+              {PALETTE_COLORS.map((c) => {
                 const selected = form.color === c;
                 return (
                   <button
                     key={c}
                     type="button"
                     onClick={() => setForm((f) => ({ ...f, color: c }))}
-                    className={`w-7 h-7 rounded-full bg-${c}-500 transition-all ${
+                    className={`w-7 h-7 rounded-full bg-${c}-500 transition-all shrink-0 ${
                       selected
                         ? "ring-2 ring-offset-1 ring-gray-900 scale-110"
                         : "hover:scale-105"

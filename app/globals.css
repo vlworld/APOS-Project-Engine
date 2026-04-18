@@ -46,7 +46,7 @@ html.dark .light {
   color: #111827;
 }
 
-/* Druck immer hell */
+/* Druck immer hell + APOS-Print-Modus (PDF-Export aus Terminplan) */
 @media print {
   html.dark,
   html.dark body {
@@ -57,6 +57,37 @@ html.dark .light {
     background-color: initial;
     color: initial;
     border-color: initial;
+  }
+  /* APOS-Print-Modus: Sidebar + TopNav verstecken, Gantt voll */
+  body.apos-printing aside,
+  body.apos-printing header {
+    display: none !important;
+  }
+  body.apos-printing main {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  body.apos-printing main > div {
+    padding: 0 !important;
+  }
+  /* Toolbar / Tab-Bar / Filter-Buttons ausblenden — nur Gantt zeigen */
+  body.apos-printing button[type="button"]:not(.print-keep),
+  body.apos-printing select,
+  body.apos-printing [role="tablist"] {
+    display: none !important;
+  }
+  body.apos-printing [data-apos-fullscreen] {
+    position: static !important;
+    background: white !important;
+  }
+  /* Sidebar-Toast/Modal-Layer im Print-Modus weg */
+  body.apos-printing .fixed {
+    position: static !important;
+  }
+  /* Querformat für breite Gantt-Charts */
+  @page {
+    size: A3 landscape;
+    margin: 1cm;
   }
 }
 

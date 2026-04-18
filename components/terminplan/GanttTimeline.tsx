@@ -36,6 +36,13 @@ interface GanttTimelineProps {
   timelineCtx: TimelineContext;
   headerHeight: number;
   onEditItem: (item: ScheduleItemDTO) => void;
+  canEdit?: boolean;
+  onCommitMove?: (
+    itemId: string,
+    newStart: string,
+    newEnd: string,
+    options?: { cascade?: boolean },
+  ) => void | Promise<void>;
 }
 
 export default function GanttTimeline({
@@ -46,7 +53,10 @@ export default function GanttTimeline({
   timelineCtx,
   headerHeight,
   onEditItem,
+  canEdit = false,
+  onCommitMove,
 }: GanttTimelineProps) {
+  const timelineBodyRef = useRef<HTMLDivElement | null>(null);
   const { rangeStart, rangeEnd, totalDays, zoomLevel, timelineWidthPx, rowHeight } =
     timelineCtx;
 
@@ -129,6 +139,7 @@ export default function GanttTimeline({
 
       {/* --- Body --- */}
       <div
+        ref={timelineBodyRef}
         className="relative"
         style={{ height: bodyHeight, minHeight: bodyHeight }}
       >
@@ -194,6 +205,10 @@ export default function GanttTimeline({
                 widthPercent={geo.widthPercent}
                 isParent={item.hasChildren}
                 onClick={() => onEditItem(item)}
+                canEdit={canEdit}
+                timelineWidthPx={timelineWidthPx}
+                totalDays={totalDays}
+                onCommitMove={onCommitMove}
               />
             </div>
           );
