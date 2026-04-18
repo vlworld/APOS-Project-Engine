@@ -46,9 +46,10 @@ Task-API (siehe `docs/20260418_Apos_Kontext.md` §13).
 - NextAuth 4 (CredentialsProvider + Prisma-Adapter)
 - npm (kein pnpm, kein Monorepo)
 
-## Aktueller Stand (2026-04-18, Abend)
+## Aktueller Stand (2026-04-19)
 
-- **Bauzeitenplan-Feature (v1) größtenteils gebaut** — siehe Session-Log unten
+- **Gantt-DnD (Move + Resize) fertig**, dazu PDF-Export aus dem Terminplan und Color-Picker-Redesign — siehe Session-Log 2026-04-19
+- **Bauzeitenplan-Feature (v1) größtenteils gebaut** — siehe Session-Log 2026-04-18
 - Schema erweitert: `TradeCategory`, `ScheduleItem`, `ScheduleDependency`, `Holiday`, `ProjectMember`, `ScheduleUndoEntry`, plus `Project.isSample` und `Holiday.isSample`
 - Auth-Fix: `organizationId` wird jetzt korrekt aus `User.organizationId` ins JWT gelegt (war vorher leerer String)
 - 2 Seed-Accounts unverändert: `vomlehn@apricus-solar.de` (DEVELOPER), `czaja@apricus-solar.de` (ADMIN), Passwort `apricus01`
@@ -108,20 +109,47 @@ Parallel-Attacke mit 6 Agenten + Main-Thread:
 - Icon für Terminplan: `Calendar` → `GanttChart` (semantisch passender)
 - Neue Sektion „Einstellungen" unten: Briefcase (Gewerke), CalendarCheck (Feiertage), FlaskConical (Musterdaten)
 
+## Session 2026-04-19 — Gantt-DnD + PDF-Export + Color-Picker
+
+**Drag & Drop für Gantt-Balken (Offen-Liste Punkt 3, Commit `1bc91a0`)**
+- `handleCommitMove` in `GanttChart`: optimistisches Update, Rollback bei
+  Fehler, optionale Cascade-Verschiebung aller Nachfolger via `/move`-Endpoint
+- `GanttBar` unterstützt Move + Resize-Start + Resize-End (DragType-Union,
+  4 px Griffe links/rechts mit `ew-resize`-Cursor)
+- Click-Events nach Drag 250 ms unterdrückt (`justDraggedRef`), damit das
+  Modal nicht versehentlich aufgeht
+- `canEdit`/`onCommitMove` von `GanttTimeline` an `GanttBar` durchgereicht
+
+**PDF-Export (Commit `1bc91a0`)**
+- Button im Terminplan-Header (`TerminplanTabs.tsx`) löst `window.print()`
+  mit `apos-printing`-Body-Class aus
+- Print-Styles in `app/globals.css`: A3 Querformat, Sidebar/TopNav/Toolbar
+  im Print ausgeblendet, `data-apos-fullscreen` auf `position: static`
+
+**Fullscreen-Layout-Fix (Commit `1bc91a0`)**
+- `fullHeight`-Prop in `GanttChart` durchgereicht, `flex-1 min-h-0` im
+  Fullscreen-Container für saubere Höhenbehandlung
+
+**Color-Picker-Redesign im ScheduleItemModal (Commit `1bc91a0`)**
+- 12 kuratierte Farben (`PALETTE_COLORS`) statt allen 22 aus
+  `TERMINPLAN_COLORS`, `flex-wrap` statt starrem 11er-Grid
+
+**Housekeeping (Commit `59ca018`)**
+- `tsconfig.tsbuildinfo` aus Index entfernt + `*.tsbuildinfo` in `.gitignore`
+
 ## Noch offen (priorisiert)
 
 1. **Gantt-UI-Integration** abschließen (Agent K läuft noch)
 2. **Realtime-Broadcast** in ScheduleItem-Service einhängen (`broadcast(projectId, event)` nach jedem Write)
-3. **DnD** für Gantt-Balken (Move + Resize) — Commit 8
-4. **DnD** für Hierarchie (Zeilen-Reorder) — Commit 9
-5. **Dependencies-UI** (Draw + Render mit SVG-Pfeilen) — Commit 10
-6. **Critical-Path visualisieren** (Algorithmus fertig, muss in `loadTerminplan` eingebaut + rot markiert werden) — Commit 12
-7. **Global-View + Personal-View** — `/terminplan` und `/terminplan/mein` — Commit 14
-8. **Undo** für Gantt-Aktionen (`ScheduleUndoEntry`-Model ist da) — Commit 15
-9. `/api/health` als offiziellen Healthcheck-Pfad in Railway-Settings eintragen
-10. Passwörter der Seed-Accounts ändern
-11. Migrationsassistent v0.1 im OOS bauen
-12. Altes `apps/apos/` im OOS-Monorepo entfernen
+3. **DnD** für Hierarchie (Zeilen-Reorder) — Commit 9
+4. **Dependencies-UI** (Draw + Render mit SVG-Pfeilen) — Commit 10
+5. **Critical-Path visualisieren** (Algorithmus fertig, muss in `loadTerminplan` eingebaut + rot markiert werden) — Commit 12
+6. **Global-View + Personal-View** — `/terminplan` und `/terminplan/mein` — Commit 14
+7. **Undo** für Gantt-Aktionen (`ScheduleUndoEntry`-Model ist da) — Commit 15
+8. `/api/health` als offiziellen Healthcheck-Pfad in Railway-Settings eintragen
+9. Passwörter der Seed-Accounts ändern
+10. Migrationsassistent v0.1 im OOS bauen
+11. Altes `apps/apos/` im OOS-Monorepo entfernen
 
 ## Commit-Regel
 
