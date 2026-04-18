@@ -1,8 +1,52 @@
 # Migrationsassistent OOS ⇄ APOS
 
-**Status:** Architekturkonzept (noch nicht implementiert)
+**Status:** Umsetzung v0.1 läuft (Scanner + Feature-Detector im OOS)
 **Zielgruppe:** Entwickler:innen, die später mit dem Tool arbeiten oder es bauen
-**Pflege:** Jede Änderung am Verfahren aktualisiert dieses Dokument. Es ist die einzige Referenz, bis ein eigenes Repo für das Tool steht.
+**Pflege:** Jede Änderung am Verfahren aktualisiert dieses Dokument.
+
+---
+
+## Finale Entscheidungen (verbindlich)
+
+Beschlossen am 2026-04-18. Weicht von ein paar ursprünglichen Empfehlungen ab — der Stand hier ist maßgeblich.
+
+| # | Entscheidung | Begründung |
+|---|---|---|
+| **Heimat** | **OOS** (Variante B, nicht eigenes Repo) | Haupt-Arbeit passiert ohnehin im OOS. Tool liegt dort nah am Quellcode. |
+| **UI** | Ja, Web-UI im OOS-Admin-Bereich unter `/developer/migration` (nur DEVELOPER-Rolle) | Bedien-Komfort vor Dev-Purismus |
+| **Umfang v0.1** | **Option C** — Scanner + Feature-Detector (M1+M2), keine Patches, kein Apply | Früher Wertgewinn durch Transparenz, ohne Risiko |
+| **APOS-Gegenspieler** | **Minimaler Empfangs-Endpoint** + Admin-Stub-Seite im APOS — nimmt Manifeste an, speichert, zeigt an. Kein Auto-Apply. | Macht die Schnittstelle sichtbar, ohne Patch-Logik reif zu haben |
+| **Bedienung** | DEVELOPER-only (wie Dev-Modus-Toggle in OOS) | Werkzeug, kein Produkt |
+| **Nightly-CI** | Erst nach v0.1 in Produktion | Features müssen stabil sein, bevor CI drauf läuft |
+| **Konventions-Drift-Command** | Teil von v0.1 | Niedrighängende Frucht, einfach umzusetzen |
+| **LLM-Integration** | Nein (v0.3+) | Deterministisch bleiben, bis das Datenformat stabil ist |
+| **Patches** | Erst v0.2, zunächst nur „new file"-Patches | Wird wenn überhaupt erst nach v0.1-Feedback gebaut |
+
+### Resultierende Architektur
+
+```
+  OOS-Repo                                   APOS-Repo
+  ─────────                                  ──────────
+  app/(app)/developer/migration/             app/(app)/einstellungen/migration/
+    page.tsx       (UI, DEVELOPER-only)        page.tsx (Empfangs-Liste)
+  app/api/developer/migration/               app/api/migration/
+    scan/          (listet OOS-Features)       incoming/  (POST: nimmt Manifest)
+    feature/[id]/  (Feature-Detail)            list/      (GET:  empfangene Manifeste)
+  lib/migration/
+    scanner.ts     (Filesystem-Walk)
+    featureDetector.ts
+    dependencyGraph.ts
+    conventionDiff.ts
+    manifest.ts    (Builder für manifest.json v1.0)
+    types.ts       (Shared-Typen — werden später in APOS gespiegelt)
+  docs/migration-assistant.md                docs/MIGRATION_ASSISTANT.md (dies)
+    (Kurzbeschreibung + Link hierher)
+
+  Flow:                                      
+  OOS → manifest.json → HTTP POST → APOS Empfang → Review durch Dev → manuelle Übernahme
+```
+
+OOS liest APOS-Codebase **nicht** direkt. Der Informationsfluss ist nur einseitig (OOS schickt, APOS empfängt). Das hält die Kopplung dünn und macht den späteren Schritt „APOS signalisiert zurück, was fehlt" zu einer bewussten Erweiterung statt einer impliziten Annahme.
 
 ---
 
