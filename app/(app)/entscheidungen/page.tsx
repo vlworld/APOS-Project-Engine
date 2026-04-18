@@ -2,12 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Scale, Plus, X, FolderKanban } from "lucide-react";
-
-interface Project {
-  id: string;
-  name: string;
-  projectNumber: string;
-}
+import { useSelectedProject } from "@/lib/hooks/useSelectedProject";
 
 type Decision = {
   id: string;
@@ -23,8 +18,7 @@ type Decision = {
 };
 
 export default function EntscheidungenTopPage() {
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [selectedProjectId, setSelectedProjectId] = useState("");
+  const { selectedId: selectedProjectId, setSelectedId: setSelectedProjectId, projects } = useSelectedProject();
   const [decisions, setDecisions] = useState<Decision[]>([]);
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -32,10 +26,6 @@ export default function EntscheidungenTopPage() {
   const [form, setForm] = useState({
     title: "", reason: "", description: "", impactTime: "", impactCost: "", impactRisk: "",
   });
-
-  useEffect(() => {
-    fetch("/api/projekte").then((r) => r.json()).then(setProjects).catch(() => {});
-  }, []);
 
   async function load() {
     if (!selectedProjectId) { setDecisions([]); return; }

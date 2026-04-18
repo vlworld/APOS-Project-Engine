@@ -2,12 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { FileText, Mail, Phone, Users, Calendar, Plus, X, MessageSquare, FolderKanban } from "lucide-react";
-
-interface Project {
-  id: string;
-  name: string;
-  projectNumber: string;
-}
+import { useSelectedProject } from "@/lib/hooks/useSelectedProject";
 
 type CommLog = {
   id: string;
@@ -44,18 +39,13 @@ const TYPE_COLORS: Record<string, string> = {
 };
 
 export default function KommunikationTopPage() {
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [selectedProjectId, setSelectedProjectId] = useState("");
+  const { selectedId: selectedProjectId, setSelectedId: setSelectedProjectId, projects } = useSelectedProject();
   const [logs, setLogs] = useState<CommLog[]>([]);
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [filterType, setFilterType] = useState("");
   const [form, setForm] = useState({ subject: "", type: "NOTE", content: "", stakeholderId: "" });
-
-  useEffect(() => {
-    fetch("/api/projekte").then((r) => r.json()).then(setProjects).catch(() => {});
-  }, []);
 
   async function load() {
     if (!selectedProjectId) { setLogs([]); return; }

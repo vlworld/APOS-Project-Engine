@@ -2,12 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { ClipboardCheck, Plus, X, ChevronDown, ChevronRight, FileDown, FolderKanban } from "lucide-react";
-
-interface Project {
-  id: string;
-  name: string;
-  projectNumber: string;
-}
+import { useSelectedProject } from "@/lib/hooks/useSelectedProject";
 
 type Protocol = {
   id: string;
@@ -37,8 +32,7 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 export default function UebergabenTopPage() {
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [selectedProjectId, setSelectedProjectId] = useState("");
+  const { selectedId: selectedProjectId, setSelectedId: setSelectedProjectId, projects } = useSelectedProject();
   const [protocols, setProtocols] = useState<Protocol[]>([]);
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -46,10 +40,6 @@ export default function UebergabenTopPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [confirmSignOff, setConfirmSignOff] = useState<string | null>(null);
   const [form, setForm] = useState({ title: "", content: "" });
-
-  useEffect(() => {
-    fetch("/api/projekte").then((r) => r.json()).then(setProjects).catch(() => {});
-  }, []);
 
   async function load() {
     if (!selectedProjectId) { setProtocols([]); return; }

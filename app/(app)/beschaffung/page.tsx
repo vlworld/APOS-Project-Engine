@@ -4,12 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import {
   Plus, Loader2, X, Package, Truck, Calendar, FolderKanban,
 } from "lucide-react";
-
-interface Project {
-  id: string;
-  name: string;
-  projectNumber: string;
-}
+import { useSelectedProject } from "@/lib/hooks/useSelectedProject";
 
 interface ProcurementItem {
   id: string;
@@ -44,8 +39,7 @@ function fmtQty(qty: number | null, unit: string | null) {
 }
 
 export default function BeschaffungTopPage() {
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [selectedProjectId, setSelectedProjectId] = useState("");
+  const { selectedId: selectedProjectId, setSelectedId: setSelectedProjectId, projects } = useSelectedProject();
   const [items, setItems] = useState<ProcurementItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -57,10 +51,6 @@ export default function BeschaffungTopPage() {
   const [formOrderDate, setFormOrderDate] = useState("");
   const [formExpected, setFormExpected] = useState("");
   const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    fetch("/api/projekte").then((r) => r.json()).then(setProjects).catch(() => {});
-  }, []);
 
   const fetchItems = useCallback(async () => {
     if (!selectedProjectId) { setItems([]); return; }

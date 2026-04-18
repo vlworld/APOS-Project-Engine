@@ -11,10 +11,6 @@ datasource db {
 // Rollen- und Rechtestruktur aus OOS uebernommen, damit Nutzer mit demselben
 // Mental-Model arbeiten und wir spaeter via zentrale Task-API ohne Rollen-
 // Mapping andocken koennen.
-//
-// Naechster Ausbau (TODO): Sub-Models WorkPackage, ScheduleItem, Risk,
-// BudgetItem, Procurement, Stakeholder, Decision, HandoverProtocol, VobItem,
-// CommunicationLog, Document.
 
 // ─── Rollen-Konvention (role-Feld) ────────────────────────────────────────
 //
@@ -24,10 +20,6 @@ datasource db {
 //   ADMIN      — Organisationsadministrator (darf alles im Org-Scope)
 //   DEVELOPER  — Technischer Entwickler (sieht System-interne Ansichten;
 //                Dev-PRIVATE-Objekte sind fuer niemanden sichtbar)
-//
-// Zusatzflags (siehe Felder unten): isExternal, isDisabled, hasOosAccess,
-// hasAposAccess, mobileClockInAllowed, reasonRequiredOnShift,
-// isReportRequired.
 
 model User {
   id            String    @id @default(cuid())
@@ -42,18 +34,15 @@ model User {
   emailVerified DateTime?
 
   // Flags (aus OOS uebernommen, semantisch identisch)
-  isExternal           Boolean @default(false) // Externer Dienstleister
-  isDisabled           Boolean @default(false) // Temporaer gesperrt
-  hasOosAccess         Boolean @default(true)  // Zugriff auf OOS
-  hasAposAccess        Boolean @default(true)  // Zugriff auf APOS (hier default true, weil eigene Instanz)
-  mobileClockInAllowed Boolean @default(false) // Mobile-Einstempeln freigeschaltet
-  reasonRequiredOnShift Boolean @default(false) // Zwingt Begruendung beim Datums-Verschieben
-  isReportRequired     Boolean @default(false) // Nur bei isExternal: Bericht pro Sitzung Pflicht
+  isExternal           Boolean @default(false)
+  isDisabled           Boolean @default(false)
+  hasOosAccess         Boolean @default(true)
+  hasAposAccess        Boolean @default(true)
+  mobileClockInAllowed Boolean @default(false)
+  reasonRequiredOnShift Boolean @default(false)
+  isReportRequired     Boolean @default(false)
+  betaMode             Boolean @default(false)
 
-  // Beta / Entwicklungs-Flags
-  betaMode Boolean @default(false)
-
-  // Tracking
   lastSeenAt DateTime?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
@@ -63,7 +52,9 @@ model User {
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   // Relationen
-  managedProjects Project[] @relation("ProjectManager")
+  managedProjects      Project[]           @relation("ProjectManager")
+  projectMemberships   ProjectMember[]
+  undoEntries          ScheduleUndoEntry[]
 
   @@index([organizationId])
   @@index([role])
@@ -72,13 +63,16 @@ model User {
 model Organization {
   id        String   @id @default(cuid())
   name      String
-  slug      String?  @unique // URL-freundlicher Kurzname
+  slug      String?  @unique
   logoUrl   String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  users    User[]
-  projects Project[]
+  users            User[]
+  projects         Project[]
+  tradeCategories  TradeCategory[]
+  holidays         Holiday[]
+  customers        Customer[]
 }
 
 model Project {
@@ -87,24 +81,268 @@ model Project {
   projectNumber  String    @unique
   description    String?
   status         String    @default("PLANNING") // PLANNING | ACTIVE | ON_HOLD | COMPLETED | ARCHIVED
-  clientName     String?
+  clientName     String?   // Legacy / Fallback, wenn kein verknüpfter Customer
+  customerId     String?
   address        String?
   budget         Float?
-  startDate      DateTime?
-  endDate        DateTime?
+  startDate               DateTime? // Projektstart (offiziell)
+  endDate                 DateTime? // Geplantes Projektende
+  plannedConstructionStart DateTime? // Geplanter Baustart
+  plannedCommissioning    DateTime? // Geplante Inbetriebnahme
+  deadline                DateTime? // Harte Deadline (z.B. Förderzusage, Netzzusage)
+  dataRoomUrl             String?   // Interner Datenraum (Google Drive / SharePoint / etc.)
+  customerDataRoomUrl     String?   // Optionaler Datenraum vom Kunden
+  isSample       Boolean   @default(false) // Muster-Projekt, via Toggle einblendbar
   organizationId String
   managerId      String
+  steeringCommitteeUserIds String[] @default([]) // User-IDs im Steuerkreis (zusätzlich zum Manager)
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id])
-  manager      User         @relation("ProjectManager", fields: [managerId], references: [id])
+  bauherrCustomerId        String?
+  landownerCustomerId      String?
+
+  organization  Organization    @relation(fields: [organizationId], references: [id])
+  manager       User            @relation("ProjectManager", fields: [managerId], references: [id])
+  customer      Customer?       @relation("ProjectAuftraggeber", fields: [customerId], references: [id], onDelete: SetNull)
+  bauherr       Customer?       @relation("ProjectBauherr", fields: [bauherrCustomerId], references: [id], onDelete: SetNull)
+  landowner     Customer?       @relation("ProjectLandowner", fields: [landownerCustomerId], references: [id], onDelete: SetNull)
+  scheduleItems ScheduleItem[]
+  members       ProjectMember[]
+  briefing      ProjectBriefing?
 
   @@index([organizationId])
   @@index([managerId])
   @@index([status])
+  @@index([isSample])
+  @@index([customerId])
+  @@index([bauherrCustomerId])
+  @@index([landownerCustomerId])
+}
 
-  // TODO(apos): Extend with sub-models: WorkPackage, ScheduleItem, Risk,
-  //             BudgetItem, Procurement, Stakeholder, Decision, HandoverProtocol,
-  //             VobItem, CommunicationLog, Document
+// ─── CRM ───────────────────────────────────────────────────────────────────
+
+model Customer {
+  id              String   @id @default(cuid())
+  organizationId  String
+  companyName     String
+  legalForm       String?  // GmbH, UG, AG, e.V., Einzelunternehmen, ...
+  street          String?
+  zipCode         String?
+  city            String?
+  country         String?  @default("Deutschland")
+  website         String?
+  phone           String?
+  email           String?
+  taxId           String?  // Steuernummer
+  vatId           String?  // USt-IdNr.
+  classification  String   @default("STANDARD") // STANDARD | IMPORTANT | STRATEGIC | WATCH | BLOCKED
+  notes           String?
+  isSample        Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  organization      Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contacts          CustomerContact[]
+  projects          Project[]         @relation("ProjectAuftraggeber")
+  bauherrProjects   Project[]         @relation("ProjectBauherr")
+  landownerProjects Project[]         @relation("ProjectLandowner")
+
+  @@index([organizationId])
+  @@index([classification])
+  @@index([isSample])
+}
+
+model CustomerContact {
+  id         String   @id @default(cuid())
+  customerId String
+  firstName  String?
+  lastName   String
+  salutation String?  // Herr, Frau, Dr., Prof.
+  role       String?  // CEO, Projektleiter, Einkauf, ...
+  email      String?
+  phone      String?
+  mobile     String?
+  isPrimary  Boolean  @default(false)
+  notes      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+}
+
+// ─── Bauzeitenplan / Gantt ─────────────────────────────────────────────────
+
+model TradeCategory {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  color          String   // Tailwind-Token-Name (z.B. "blue", "emerald", "rose")
+  orderIndex     Int      @default(0)
+  isSample       Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  scheduleItems ScheduleItem[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+  @@index([isSample])
+}
+
+model ScheduleItem {
+  id              String   @id @default(cuid())
+  projectId       String
+  parentId        String?
+  name            String
+  description     String?
+  startDate       DateTime
+  endDate         DateTime
+  progress        Int      @default(0) // 0–100
+  status          String   @default("OPEN") // OPEN | IN_PROGRESS | DONE
+  tradeCategoryId String?
+  isMilestone     Boolean  @default(false)
+  color           String?  // optionaler Override, Default = tradeCategory.color
+  orderIndex      Int      @default(0)
+  assignedToId    String?  // optionaler User-Bezug (für Personal-View)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  project       Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parent        ScheduleItem?  @relation("ScheduleItemHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children      ScheduleItem[] @relation("ScheduleItemHierarchy")
+  tradeCategory TradeCategory? @relation(fields: [tradeCategoryId], references: [id], onDelete: SetNull)
+
+  dependenciesOut ScheduleDependency[] @relation("DependencyFrom")
+  dependenciesIn  ScheduleDependency[] @relation("DependencyTo")
+
+  @@index([projectId])
+  @@index([parentId])
+  @@index([tradeCategoryId])
+  @@index([assignedToId])
+  @@index([status])
+}
+
+model ScheduleDependency {
+  id        String   @id @default(cuid())
+  fromId    String
+  toId      String
+  type      String   @default("FS") // FS | SS | FF
+  lagDays   Int      @default(0)
+  createdAt DateTime @default(now())
+
+  from ScheduleItem @relation("DependencyFrom", fields: [fromId], references: [id], onDelete: Cascade)
+  to   ScheduleItem @relation("DependencyTo",   fields: [toId],   references: [id], onDelete: Cascade)
+
+  @@unique([fromId, toId, type])
+  @@index([fromId])
+  @@index([toId])
+}
+
+model Holiday {
+  id             String   @id @default(cuid())
+  organizationId String
+  date           DateTime
+  name           String
+  isSample       Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, date])
+  @@index([organizationId])
+  @@index([isSample])
+}
+
+model ProjectMember {
+  id        String   @id @default(cuid())
+  projectId String
+  userId    String
+  role      String   @default("READ") // READ | WRITE
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId],    references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+  @@index([projectId])
+  @@index([userId])
+}
+
+model ScheduleUndoEntry {
+  id          String   @id @default(cuid())
+  userId      String
+  projectId   String
+  action      String   // "move" | "resize" | "delete" | "create" | "reorder" | "dep.add" | "dep.remove"
+  beforeState Json     // vollständiger State-Snapshot vor der Aktion
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([projectId])
+  @@index([createdAt])
+}
+
+// ─── Projektsteckbrief (Übergabeprotokoll) ─────────────────────────────────
+// Pro Projekt genau ein Steckbrief (1:1). Strukturiertes Übergabedokument
+// mit Grundinfos, BW-Daten, Technik, Abwicklung und einer Nächste-Schritte-
+// Checkliste. Felder, die bereits am Project-Model hängen (z.B. Adresse,
+// Projektnummer, Baustart), werden NICHT dupliziert.
+
+model ProjectBriefing {
+  id        String @id @default(cuid())
+  projectId String @unique
+
+  // Grundinformationen
+  akquisiteur          String?
+  groesseKwp           Float?
+  verantwortlichkeit   String?
+  prioritaet           String? // "A" | "B" | "C"
+  richtlinie           String? // z.B. "4110"
+  anlagentyp           String? // "Freifläche" | "Dach" | "Batterie"
+  projektbeschreibung  String?
+  vorhandeneUnterlagen String?
+
+  // Betriebswirtschaftlich
+  stakeholder        String?
+  ansprechpartner    String?
+  auftragsvolumenEur Float?
+  bwMeilensteine     String?
+
+  // Technisch
+  netzgebiet         String?
+  technischeAnnahmen String?
+  monteurplanung     String?
+
+  // Projektabwicklung
+  herausforderungen      String?
+  absehbareProbleme      String?
+  informationsIntervall  String?
+  ersteTodos             String?
+  offeneTodosVorStart    String?
+  erwartungenKunde       String?
+  ausserordentlicheAbspr String?
+  sonstigeAnmerkungen    String?
+
+  // Übergabe-Checkliste als JSON:
+  // Array<{ id: string; text: string; verantwortlich: string | null; done: boolean; doneAt?: string }>
+  naechsteSchritte Json?
+
+  // Meta
+  version          String    @default("1.0")
+  uebergebenAm     DateTime?
+  uebergebenVonId  String?
+  uebernommenVonId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
 }

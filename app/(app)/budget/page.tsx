@@ -4,12 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import {
   Plus, Loader2, X, TrendingUp, TrendingDown, Wallet, BarChart3, Receipt, FolderKanban,
 } from "lucide-react";
-
-interface Project {
-  id: string;
-  name: string;
-  projectNumber: string;
-}
+import { useSelectedProject } from "@/lib/hooks/useSelectedProject";
 
 interface BudgetItem {
   id: string;
@@ -51,8 +46,7 @@ function rowVariance(planned: number, actual: number) {
 }
 
 export default function BudgetTopPage() {
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [selectedProjectId, setSelectedProjectId] = useState("");
+  const { selectedId: selectedProjectId, setSelectedId: setSelectedProjectId, projects } = useSelectedProject();
   const [items, setItems] = useState<BudgetItem[]>([]);
   const [summary, setSummary] = useState<BudgetSummary>({ totalPlanned: 0, totalActual: 0, totalForecast: 0, variance: 0 });
   const [loading, setLoading] = useState(false);
@@ -65,10 +59,6 @@ export default function BudgetTopPage() {
   const [formForecast, setFormForecast] = useState("");
   const [formInvoice, setFormInvoice] = useState("");
   const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    fetch("/api/projekte").then((r) => r.json()).then(setProjects).catch(() => {});
-  }, []);
 
   const fetchData = useCallback(async () => {
     if (!selectedProjectId) { setItems([]); setSummary({ totalPlanned: 0, totalActual: 0, totalForecast: 0, variance: 0 }); return; }

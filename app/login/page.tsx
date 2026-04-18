@@ -6,7 +6,9 @@ import { FolderKanban, AlertCircle, Loader2, ExternalLink } from "lucide-react";
 import LightOnly from "@/components/theme/LightOnly";
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(
+    process.env.NEXT_PUBLIC_DEFAULT_LOGIN_EMAIL ?? "",
+  );
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);

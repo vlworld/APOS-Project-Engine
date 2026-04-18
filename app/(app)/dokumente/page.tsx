@@ -2,12 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { FileText, Plus, X, ExternalLink, FolderKanban } from "lucide-react";
-
-interface Project {
-  id: string;
-  name: string;
-  projectNumber: string;
-}
+import { useSelectedProject } from "@/lib/hooks/useSelectedProject";
 
 type Document = {
   id: string;
@@ -39,18 +34,13 @@ const CATEGORY_STYLES: Record<string, string> = {
 };
 
 export default function DokumenteTopPage() {
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [selectedProjectId, setSelectedProjectId] = useState("");
+  const { selectedId: selectedProjectId, setSelectedId: setSelectedProjectId, projects } = useSelectedProject();
   const [documents, setDocuments] = useState<Document[]>([]);
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [filterCategory, setFilterCategory] = useState("");
   const [form, setForm] = useState({ title: "", fileName: "", fileUrl: "", category: "", mimeType: "" });
-
-  useEffect(() => {
-    fetch("/api/projekte").then((r) => r.json()).then(setProjects).catch(() => {});
-  }, []);
 
   async function load() {
     if (!selectedProjectId) { setDocuments([]); return; }

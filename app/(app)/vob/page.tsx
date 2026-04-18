@@ -5,12 +5,7 @@ import {
   Plus, Clock, AlertTriangle, FileText, Scale, ShieldCheck, Hammer,
   Loader2, X, Calendar, FolderKanban,
 } from "lucide-react";
-
-interface Project {
-  id: string;
-  name: string;
-  projectNumber: string;
-}
+import { useSelectedProject } from "@/lib/hooks/useSelectedProject";
 
 interface VobItem {
   id: string;
@@ -64,8 +59,7 @@ function isDueSoon(dueDate: string | null): boolean {
 }
 
 export default function VobTopPage() {
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [selectedProjectId, setSelectedProjectId] = useState("");
+  const { selectedId: selectedProjectId, setSelectedId: setSelectedProjectId, projects } = useSelectedProject();
   const [items, setItems] = useState<VobItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<string>("DEADLINE");
@@ -77,10 +71,6 @@ export default function VobTopPage() {
   const [formAmount, setFormAmount] = useState("");
   const [formReference, setFormReference] = useState("");
   const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    fetch("/api/projekte").then((r) => r.json()).then(setProjects).catch(() => {});
-  }, []);
 
   const fetchItems = useCallback(async () => {
     if (!selectedProjectId) { setItems([]); return; }

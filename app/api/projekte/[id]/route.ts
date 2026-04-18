@@ -41,7 +41,24 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       ...(body.startDate !== undefined && { startDate: body.startDate ? new Date(body.startDate) : null }),
       ...(body.endDate !== undefined && { endDate: body.endDate ? new Date(body.endDate) : null }),
       ...(body.managerId !== undefined && { managerId: body.managerId }),
-      // TODO(apos-extract): address, clientName, budget — add to schema when expanding
+      ...(body.clientName !== undefined && { clientName: body.clientName?.trim() || null }),
+      ...(body.address !== undefined && { address: body.address?.trim() || null }),
+      ...(body.budget !== undefined && { budget: body.budget }),
+      ...(body.customerId !== undefined && { customerId: body.customerId || null }),
+      ...(body.plannedConstructionStart !== undefined && {
+        plannedConstructionStart: body.plannedConstructionStart ? new Date(body.plannedConstructionStart) : null,
+      }),
+      ...(body.plannedCommissioning !== undefined && {
+        plannedCommissioning: body.plannedCommissioning ? new Date(body.plannedCommissioning) : null,
+      }),
+      ...(body.deadline !== undefined && {
+        deadline: body.deadline ? new Date(body.deadline) : null,
+      }),
+      ...(body.dataRoomUrl !== undefined && { dataRoomUrl: body.dataRoomUrl?.trim() || null }),
+      ...(body.customerDataRoomUrl !== undefined && { customerDataRoomUrl: body.customerDataRoomUrl?.trim() || null }),
+      ...(body.steeringCommitteeUserIds !== undefined && {
+        steeringCommitteeUserIds: Array.isArray(body.steeringCommitteeUserIds) ? body.steeringCommitteeUserIds : [],
+      }),
     },
   });
 
