@@ -2,20 +2,23 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useSession } from "next-auth/react";
 import {
-  LayoutDashboard, FolderKanban, Package, Calendar, Scale,
-  DollarSign, Truck, Users, ClipboardList, AlertTriangle,
-  FileText, FileCheck, Mail, ExternalLink,
+  LayoutDashboard, FolderKanban, Package, GanttChart, Scale,
+  DollarSign, Truck, Users, Users2, ClipboardList, AlertTriangle,
+  FileText, FileCheck, Mail, ExternalLink, CalendarCheck,
+  Briefcase, FlaskConical, BarChart3, Contact, Settings,
 } from "lucide-react";
 
 const navItems = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
   { href: "/projekte", icon: FolderKanban, label: "Projekte" },
+  { href: "/kunden", icon: Contact, label: "Kunden (CRM)" },
 ];
 
 const moduleItems = [
   { href: "/arbeitspakete", icon: Package, label: "Arbeitspakete" },
-  { href: "/terminplan", icon: Calendar, label: "Terminplan" },
+  { href: "/terminplan", icon: GanttChart, label: "Terminplan" },
   { href: "/vob", icon: Scale, label: "VOB" },
   { href: "/budget", icon: DollarSign, label: "Budget" },
   { href: "/beschaffung", icon: Truck, label: "Beschaffung" },
@@ -27,6 +30,18 @@ const moduleItems = [
   { href: "/kommunikation", icon: Mail, label: "Kommunikation" },
 ];
 
+const settingsItems = [
+  { href: "/einstellungen/benutzer", icon: Users2, label: "Benutzer" },
+  { href: "/einstellungen/gewerke", icon: Briefcase, label: "Gewerke" },
+  { href: "/einstellungen/feiertage", icon: CalendarCheck, label: "Feiertage" },
+  { href: "/einstellungen/muster", icon: FlaskConical, label: "Musterdaten" },
+];
+
+// Nur für ADMIN / DEVELOPER sichtbar
+const adminItems = [
+  { href: "/admin/kpi", icon: BarChart3, label: "KPI Dashboard" },
+];
+
 function extractProjectId(pathname: string): string | null {
   const match = pathname.match(/^\/projekte\/([^/]+)/);
   if (match && match[1] !== "neu") return match[1];
@@ -36,6 +51,9 @@ function extractProjectId(pathname: string): string | null {
 export default function Sidebar() {
   const pathname = usePathname();
   const projectId = extractProjectId(pathname);
+  const { data: session } = useSession();
+  const role = session?.user?.role;
+  const showAdmin = role === "ADMIN" || role === "DEVELOPER";
 
   const isActive = (href: string) => {
     if (href === "/dashboard") return pathname === "/dashboard";
@@ -99,10 +117,61 @@ export default function Sidebar() {
             <Icon size={16} />
           </Link>
         ))}
+
+        {/* Separator */}
+        <div className="w-6 h-px bg-gray-700 my-1 flex-shrink-0" />
+
+        {/* Settings links */}
+        {settingsItems.map(({ href, icon: Icon, label }) => (
+          <Link
+            key={href}
+            href={href}
+            title={label}
+            className={`w-9 h-9 rounded-lg flex items-center justify-center transition-colors flex-shrink-0 ${
+              pathname.startsWith(href)
+                ? "bg-emerald-600 text-white"
+                : "text-gray-500 hover:bg-gray-700 hover:text-white"
+            }`}
+          >
+            <Icon size={16} />
+          </Link>
+        ))}
+
+        {/* Admin-Sektion (nur für ADMIN/DEVELOPER) */}
+        {showAdmin && (
+          <>
+            <div className="w-6 h-px bg-gray-700 my-1 flex-shrink-0" />
+            {adminItems.map(({ href, icon: Icon, label }) => (
+              <Link
+                key={href}
+                href={href}
+                title={label}
+                className={`w-9 h-9 rounded-lg flex items-center justify-center transition-colors flex-shrink-0 ${
+                  pathname.startsWith(href)
+                    ? "bg-emerald-600 text-white"
+                    : "text-gray-500 hover:bg-gray-700 hover:text-white"
+                }`}
+              >
+                <Icon size={16} />
+              </Link>
+            ))}
+          </>
+        )}
       </nav>
 
-      {/* Bottom: link to OOS */}
+      {/* Bottom: Settings + OOS-Link */}
       <div className="flex flex-col items-center gap-1 px-1.5">
+        <Link
+          href="/einstellungen"
+          title="Einstellungen"
+          className={`w-9 h-9 rounded-lg flex items-center justify-center transition-colors ${
+            pathname === "/einstellungen"
+              ? "bg-emerald-600 text-white"
+              : "text-gray-500 hover:bg-gray-700 hover:text-white"
+          }`}
+        >
+          <Settings size={16} />
+        </Link>
         <a
           href={process.env.NEXT_PUBLIC_OOS_URL || "http://localhost:3000"}
           target="_blank"

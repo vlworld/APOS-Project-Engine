@@ -2,12 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Users, Plus, X, Mail, Phone, Building2, MessageSquare, FolderKanban } from "lucide-react";
-
-interface Project {
-  id: string;
-  name: string;
-  projectNumber: string;
-}
+import { useSelectedProject } from "@/lib/hooks/useSelectedProject";
 
 type Stakeholder = {
   id: string;
@@ -20,17 +15,12 @@ type Stakeholder = {
 };
 
 export default function StakeholderTopPage() {
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [selectedProjectId, setSelectedProjectId] = useState("");
+  const { selectedId: selectedProjectId, setSelectedId: setSelectedProjectId, projects } = useSelectedProject();
   const [stakeholders, setStakeholders] = useState<Stakeholder[]>([]);
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ name: "", role: "", company: "", email: "", phone: "" });
-
-  useEffect(() => {
-    fetch("/api/projekte").then((r) => r.json()).then(setProjects).catch(() => {});
-  }, []);
 
   async function load() {
     if (!selectedProjectId) { setStakeholders([]); return; }

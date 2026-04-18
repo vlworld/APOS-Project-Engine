@@ -11,7 +11,7 @@ export async function GET() {
   const projects = await prisma.project.findMany({
     where: { organizationId: session!.user.organizationId },
     include: {
-      manager: { select: { id: true, name: true, email: true } },
+      manager: { select: { id: true, name: true, email: true, kuerzel: true } },
     },
     orderBy: { updatedAt: "desc" },
   });
@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
       organizationId: session!.user.organizationId,
     },
     include: {
-      manager: { select: { id: true, name: true, email: true } },
+      manager: { select: { id: true, name: true, email: true, kuerzel: true } },
     },
   });
 

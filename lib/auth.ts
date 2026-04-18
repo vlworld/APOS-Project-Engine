@@ -49,8 +49,7 @@ export const authOptions: NextAuthOptions = {
           email: user.email,
           name: user.name,
           role: user.role,
-          // TODO(apos): Add organizationId once Organization model is properly linked
-          organizationId: "",
+          organizationId: user.organizationId,
         };
       },
     }),

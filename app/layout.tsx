@@ -7,6 +7,7 @@ import { authOptions } from "@/lib/auth";
 import { cookies } from "next/headers";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import { THEME_BOOTSTRAP_SCRIPT, THEME_COOKIE, isThemeMode } from "@/lib/theme";
+import { ToastProvider } from "@/components/ui/Toast";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -39,7 +40,9 @@ export default async function RootLayout({
       <body className={`${inter.className} h-full antialiased`}>
         <SessionProvider session={session}>
           <ThemeProvider>
-            {children}
+            <ToastProvider>
+              {children}
+            </ToastProvider>
           </ThemeProvider>
         </SessionProvider>
       </body>

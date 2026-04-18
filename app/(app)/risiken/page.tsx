@@ -2,12 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { ShieldAlert, Plus, X, FolderKanban } from "lucide-react";
-
-interface Project {
-  id: string;
-  name: string;
-  projectNumber: string;
-}
+import { useSelectedProject } from "@/lib/hooks/useSelectedProject";
 
 type Risk = {
   id: string;
@@ -41,8 +36,7 @@ const LEVEL_OPTIONS = ["LOW", "MEDIUM", "HIGH"];
 const LEVEL_LABELS: Record<string, string> = { LOW: "Niedrig", MEDIUM: "Mittel", HIGH: "Hoch" };
 
 export default function RisikenTopPage() {
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [selectedProjectId, setSelectedProjectId] = useState("");
+  const { selectedId: selectedProjectId, setSelectedId: setSelectedProjectId, projects } = useSelectedProject();
   const [risks, setRisks] = useState<Risk[]>([]);
   const [loading, setLoading] = useState(false);
   const [creatingType, setCreatingType] = useState<"RISK" | "ISSUE" | null>(null);
@@ -50,10 +44,6 @@ export default function RisikenTopPage() {
   const [form, setForm] = useState({
     title: "", type: "RISK", description: "", probability: "MEDIUM", impact: "MEDIUM", mitigationPlan: "",
   });
-
-  useEffect(() => {
-    fetch("/api/projekte").then((r) => r.json()).then(setProjects).catch(() => {});
-  }, []);
 
   async function load() {
     if (!selectedProjectId) { setRisks([]); return; }

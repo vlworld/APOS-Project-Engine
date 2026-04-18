@@ -10,12 +10,7 @@ import {
   User,
   FolderKanban,
 } from "lucide-react";
-
-interface Project {
-  id: string;
-  name: string;
-  projectNumber: string;
-}
+import { useSelectedProject } from "@/lib/hooks/useSelectedProject";
 
 interface WorkPackage {
   id: string;
@@ -42,8 +37,7 @@ function getDepth(wbsCode: string): number {
 }
 
 export default function ArbeitspacketePage() {
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [selectedProjectId, setSelectedProjectId] = useState("");
+  const { selectedId: selectedProjectId, setSelectedId: setSelectedProjectId, projects } = useSelectedProject();
   const [workPackages, setWorkPackages] = useState<WorkPackage[]>([]);
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -57,13 +51,6 @@ export default function ArbeitspacketePage() {
     trade: "",
     parentId: "",
   });
-
-  useEffect(() => {
-    fetch("/api/projekte")
-      .then((r) => r.json())
-      .then(setProjects)
-      .catch(() => {});
-  }, []);
 
   const fetchData = useCallback(async () => {
     if (!selectedProjectId) {

@@ -26,9 +26,12 @@ export default function TopNav() {
       <div className="ml-auto flex items-center gap-3">
         <ThemeToggle />
         {session?.user && (
-          <span className="text-xs text-gray-500">
-            {session.user.name}
-          </span>
+          <>
+            <span className="h-5 w-px bg-gray-200" aria-hidden />
+            <span className="text-xs text-gray-500">
+              {session.user.name}
+            </span>
+          </>
         )}
       </div>
     </header>
