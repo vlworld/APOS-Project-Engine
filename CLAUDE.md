@@ -137,6 +137,31 @@ Parallel-Attacke mit 6 Agenten + Main-Thread:
 **Housekeeping (Commit `59ca018`)**
 - `tsconfig.tsbuildinfo` aus Index entfernt + `*.tsbuildinfo` in `.gitignore`
 
+**Dashboard-Zentrierung (Commit `b1b0952`)**
+- `/dashboard`: `mx-auto` ergänzt — Inhalt hing durch `max-w-4xl` ohne
+  Zentrierung links am Rand. Hinweis für nächsten Chat: beim Testen hat
+  der Dev-Server die Änderung nicht erkannt (Turbopack verliert nach
+  ~5 h Laufzeit den File-Watch für `(app)`-Routing-Groups). Falls die
+  Änderung nicht sichtbar ist: Dev-Server neu starten.
+
+## Bekannte Bugs (Stand 2026-04-19, ungefixt)
+
+1. **React-Warnung beim Gantt-Drag** (keine UI-Auswirkung, aber muss weg):
+   Console-Error „Cannot update a component (GanttChart) while rendering
+   a different component (GanttBar)". Vermutliche Ursache: in
+   [GanttBar.tsx:143-155](components/terminplan/GanttBar.tsx:143) wird
+   `commitDrag(prev)` innerhalb des `setDrag((prev) => ...)`-Updaters
+   aufgerufen. `commitDrag` ruft `onCommitMove`, das synchron `setData`
+   in `GanttChart` triggert. React-State-Updater müssen pure sein.
+   **Fix-Skizze:** die aktuelle `prev`-Referenz in einem lokalen `let`
+   zwischenspeichern, im Updater nur `return null` machen und
+   `commitDrag` **nach** dem `setDrag`-Call (bzw. in einem
+   `useEffect`-Cleanup) aufrufen.
+
+2. **„Neues Projekt" aus dem Dashboard heraus funktioniert nicht** —
+   gemeldet 2026-04-19, noch nicht analysiert. Button/Link auf
+   `/dashboard` prüfen, inkl. Target-Route und ggf. Permission-Check.
+
 ## Noch offen (priorisiert)
 
 1. **Gantt-UI-Integration** abschließen (Agent K läuft noch)
