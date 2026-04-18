@@ -7,41 +7,86 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ─── APOS Minimal-Schema ──────────────────────────────────────────────────────
-// Stand: Extraktion aus Monorepo. Wird mit echten APOS-Models erweitert.
-// TODO(apos): Dieses Schema ist ein Ausgangspunkt. Die vollständigen Models
-//             (AposProject, AposWorkPackage, etc.) aus dem Monorepo-Schema
-//             in packages/database/prisma/schema.prisma übernehmen sobald
-//             die eigene DB provisioniert wird.
+// ─── APOS Schema ──────────────────────────────────────────────────────────────
+// Rollen- und Rechtestruktur aus OOS uebernommen, damit Nutzer mit demselben
+// Mental-Model arbeiten und wir spaeter via zentrale Task-API ohne Rollen-
+// Mapping andocken koennen.
+//
+// Naechster Ausbau (TODO): Sub-Models WorkPackage, ScheduleItem, Risk,
+// BudgetItem, Procurement, Stakeholder, Decision, HandoverProtocol, VobItem,
+// CommunicationLog, Document.
+
+// ─── Rollen-Konvention (role-Feld) ────────────────────────────────────────
+//
+//   EMPLOYEE   — Standard-Mitarbeiter
+//   MANAGER    — Fuehrungskraft (erweiterte Sichtbarkeit, Team-Boards,
+//                darf fremde PRIVATE-Objekte mit "Privat"-Badge sehen)
+//   ADMIN      — Organisationsadministrator (darf alles im Org-Scope)
+//   DEVELOPER  — Technischer Entwickler (sieht System-interne Ansichten;
+//                Dev-PRIVATE-Objekte sind fuer niemanden sichtbar)
+//
+// Zusatzflags (siehe Felder unten): isExternal, isDisabled, hasOosAccess,
+// hasAposAccess, mobileClockInAllowed, reasonRequiredOnShift,
+// isReportRequired.
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  password  String?
-  role      String   @default("EMPLOYEE")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String
+  password      String?   // bcrypt-Hash, null wenn SSO
+  role          String    @default("EMPLOYEE") // EMPLOYEE | MANAGER | ADMIN | DEVELOPER
+  kuerzel       String?   // Kuerzel / Initialen (max 3 Zeichen)
+  position      String?
+  department    String?
+  image         String?
+  emailVerified DateTime?
 
-  // Projects this user manages
+  // Flags (aus OOS uebernommen, semantisch identisch)
+  isExternal           Boolean @default(false) // Externer Dienstleister
+  isDisabled           Boolean @default(false) // Temporaer gesperrt
+  hasOosAccess         Boolean @default(true)  // Zugriff auf OOS
+  hasAposAccess        Boolean @default(true)  // Zugriff auf APOS (hier default true, weil eigene Instanz)
+  mobileClockInAllowed Boolean @default(false) // Mobile-Einstempeln freigeschaltet
+  reasonRequiredOnShift Boolean @default(false) // Zwingt Begruendung beim Datums-Verschieben
+  isReportRequired     Boolean @default(false) // Nur bei isExternal: Bericht pro Sitzung Pflicht
+
+  // Beta / Entwicklungs-Flags
+  betaMode Boolean @default(false)
+
+  // Tracking
+  lastSeenAt DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Multi-Tenancy
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Relationen
   managedProjects Project[] @relation("ProjectManager")
+
+  @@index([organizationId])
+  @@index([role])
 }
 
 model Organization {
-  id        String    @id @default(cuid())
+  id        String   @id @default(cuid())
   name      String
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  slug      String?  @unique // URL-freundlicher Kurzname
+  logoUrl   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  projects  Project[]
+  users    User[]
+  projects Project[]
 }
 
 model Project {
-  id             String       @id @default(cuid())
+  id             String    @id @default(cuid())
   name           String
-  projectNumber  String       @unique
+  projectNumber  String    @unique
   description    String?
-  status         String       @default("PLANNING")
+  status         String    @default("PLANNING") // PLANNING | ACTIVE | ON_HOLD | COMPLETED | ARCHIVED
   clientName     String?
   address        String?
   budget         Float?
@@ -49,11 +94,15 @@ model Project {
   endDate        DateTime?
   organizationId String
   managerId      String
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
-  organization   Organization @relation(fields: [organizationId], references: [id])
-  manager        User         @relation("ProjectManager", fields: [managerId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
+  manager      User         @relation("ProjectManager", fields: [managerId], references: [id])
+
+  @@index([organizationId])
+  @@index([managerId])
+  @@index([status])
 
   // TODO(apos): Extend with sub-models: WorkPackage, ScheduleItem, Risk,
   //             BudgetItem, Procurement, Stakeholder, Decision, HandoverProtocol,
