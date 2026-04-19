@@ -87,11 +87,19 @@ function isDependencyType(s: unknown): s is DependencyType {
   return s === "FS" || s === "SS" || s === "FF";
 }
 
+function isValidEventStatus(
+  s: unknown,
+): s is "PLANNED" | "SCHEDULED" | "DONE" {
+  return s === "PLANNED" || s === "SCHEDULED" || s === "DONE";
+}
+
 // ---------------------------------------------------------------------------
 // DTO-Mapping
 // ---------------------------------------------------------------------------
 
-type ScheduleItemRow = ScheduleItem;
+type ScheduleItemRow = Prisma.ScheduleItemGetPayload<{
+  include: { events: true };
+}>;
 
 type DerivedFields = {
   isDelayed: boolean;
@@ -113,10 +121,27 @@ function toScheduleItemDTO(
     description: row.description,
     startDate: row.startDate.toISOString(),
     endDate: row.endDate.toISOString(),
+    bufferDays: row.bufferDays,
+    deadline: row.deadline ? row.deadline.toISOString() : null,
     progress: row.progress,
     status: row.status as ScheduleItemStatus,
     tradeCategoryId: row.tradeCategoryId,
     isMilestone: row.isMilestone,
+    isTimeRange: row.isTimeRange,
+    events: [...row.events]
+      .sort(
+        (a, b) =>
+          a.orderIndex - b.orderIndex ||
+          a.date.getTime() - b.date.getTime(),
+      )
+      .map((ev) => ({
+        id: ev.id,
+        itemId: ev.itemId,
+        date: ev.date.toISOString(),
+        label: ev.label,
+        status: ev.status as "PLANNED" | "SCHEDULED" | "DONE",
+        orderIndex: ev.orderIndex,
+      })),
     color: row.color,
     orderIndex: row.orderIndex,
     assignedToId: row.assignedToId,
@@ -239,6 +264,7 @@ export async function loadTerminplan(
     prisma.scheduleItem.findMany({
       where: { projectId },
       orderBy: [{ orderIndex: "asc" }, { createdAt: "asc" }],
+      include: { events: true },
     }),
     prisma.scheduleDependency.findMany({
       where: {
@@ -321,6 +347,7 @@ async function hydrateItem(
   const items = await prisma.scheduleItem.findMany({
     where: { projectId },
     orderBy: [{ orderIndex: "asc" }, { createdAt: "asc" }],
+    include: { events: true },
   });
   const target = items.find((i) => i.id === itemId);
   if (!target) return null;
@@ -411,13 +438,28 @@ export async function createScheduleItem(
       description: input.description?.trim() || null,
       startDate: start,
       endDate: end,
+      bufferDays: Math.max(0, Math.floor(input.bufferDays ?? 0)),
+      deadline: input.deadline ? parseDateInput(input.deadline) : null,
       progress,
       status,
       tradeCategoryId: input.tradeCategoryId ?? null,
       isMilestone: input.isMilestone ?? false,
+      isTimeRange: input.isTimeRange ?? false,
       color: input.color ?? null,
       orderIndex,
       assignedToId: input.assignedToId ?? null,
+      ...(input.events && input.events.length > 0
+        ? {
+            events: {
+              create: input.events.map((ev, idx) => ({
+                date: parseDateInput(ev.date),
+                label: ev.label?.trim() || null,
+                status: isValidEventStatus(ev.status) ? ev.status : "PLANNED",
+                orderIndex: ev.orderIndex ?? idx,
+              })),
+            },
+          }
+        : {}),
     },
   });
 
@@ -510,6 +552,28 @@ export async function updateScheduleItem(
   if (input.isMilestone !== undefined) data.isMilestone = input.isMilestone;
   if (input.color !== undefined) data.color = input.color;
   if (input.orderIndex !== undefined) data.orderIndex = input.orderIndex;
+  if (input.bufferDays !== undefined) {
+    data.bufferDays = Math.max(0, Math.floor(input.bufferDays));
+  }
+
+  if (input.deadline !== undefined) {
+    data.deadline = input.deadline ? parseDateInput(input.deadline) : null;
+  }
+
+  if (input.isTimeRange !== undefined) data.isTimeRange = input.isTimeRange;
+
+  // Events: wenn array angegeben, replace-all
+  if (input.events !== undefined) {
+    data.events = {
+      deleteMany: {},
+      create: input.events.map((ev, idx) => ({
+        date: parseDateInput(ev.date),
+        label: ev.label?.trim() || null,
+        status: isValidEventStatus(ev.status) ? ev.status : "PLANNED",
+        orderIndex: ev.orderIndex ?? idx,
+      })),
+    };
+  }
 
   if (input.assignedToId !== undefined) {
     data.assignedToId = input.assignedToId;

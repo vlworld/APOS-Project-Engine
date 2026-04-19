@@ -6,6 +6,26 @@ export type ScheduleItemStatus = "OPEN" | "IN_PROGRESS" | "DONE";
 
 export type DependencyType = "FS" | "SS" | "FF";
 
+export type ScheduleItemEventStatus = "PLANNED" | "SCHEDULED" | "DONE";
+
+export type ScheduleItemEventDTO = {
+  id: string;
+  itemId: string;
+  date: string; // ISO
+  label: string | null;
+  status: ScheduleItemEventStatus;
+  orderIndex: number;
+};
+
+export type ScheduleItemEventInput = {
+  // id = optional (für Updates); fehlend oder mit "new-"-Prefix ⇒ neues Event
+  id?: string;
+  date: string; // "YYYY-MM-DD" oder ISO
+  label?: string | null;
+  status?: ScheduleItemEventStatus;
+  orderIndex?: number;
+};
+
 // DTO wie es die API liefert (Dates als ISO-Strings, da JSON).
 export type ScheduleItemDTO = {
   id: string;
@@ -15,10 +35,13 @@ export type ScheduleItemDTO = {
   description: string | null;
   startDate: string; // ISO-String
   endDate: string;
+  bufferDays: number; // Puffer in Arbeitstagen nach endDate (visuell schraffiert)
+  deadline: string | null; // Harte Deadline (ISO-String) — rotes Flag im Gantt
   progress: number; // 0–100
   status: ScheduleItemStatus;
   tradeCategoryId: string | null;
   isMilestone: boolean;
+  isTimeRange: boolean;
   color: string | null;
   orderIndex: number;
   assignedToId: string | null;
@@ -31,6 +54,9 @@ export type ScheduleItemDTO = {
   wbsCode: string; // z.B. "1.2.3" aus Hierarchie + orderIndex
   depth: number; // Einrückungstiefe (0 = Top-Level)
   hasChildren: boolean;
+
+  // Zeitraum-Events (nur gefüllt wenn isTimeRange=true)
+  events: ScheduleItemEventDTO[];
 };
 
 export type ScheduleDependencyDTO = {
@@ -56,10 +82,14 @@ export type CreateScheduleItemInput = {
   description?: string;
   startDate: string; // "YYYY-MM-DD"
   endDate: string;
+  bufferDays?: number;
+  deadline?: string | null; // "YYYY-MM-DD" oder ISO; null = keine Deadline
   progress?: number;
   status?: ScheduleItemStatus;
   tradeCategoryId?: string | null;
   isMilestone?: boolean;
+  isTimeRange?: boolean;
+  events?: ScheduleItemEventInput[]; // Replace-all bei update (wenn angegeben)
   color?: string | null;
   orderIndex?: number;
   assignedToId?: string | null;

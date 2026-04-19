@@ -6,7 +6,7 @@
 // - Optional: Farb-Override über Farb-Picker.
 
 import { useEffect, useState, useRef, useMemo } from "react";
-import { X, Loader2, Palette } from "lucide-react";
+import { X, Loader2, Palette, Flag, Plus, Trash2 } from "lucide-react";
 import DatePicker from "@/components/ui/DatePicker";
 import { useToast } from "@/components/ui/Toast";
 import type {
@@ -18,6 +18,16 @@ import {
   TERMINPLAN_COLORS,
   safeColor,
 } from "./TailwindColorSafelist";
+
+// Kuratierte Auswahl für den Color-Picker (Untermenge der TERMINPLAN_COLORS).
+// Voller Satz bleibt für Gewerke verfügbar; im Item-Override reicht die Auswahl.
+const PALETTE_COLORS = [
+  "slate", "blue", "cyan", "teal", "emerald",
+  "lime", "amber", "orange", "red", "rose",
+  "violet", "fuchsia",
+] as const;
+// Damit TS-Strict gegen TERMINPLAN_COLORS-Typ matcht
+void TERMINPLAN_COLORS;
 
 interface ProjectMember {
   id: string;
@@ -36,18 +46,36 @@ interface ScheduleItemModalProps {
   onSaved: () => void;
 }
 
+type EventFormState = {
+  // "new-<n>" oder echte ID
+  id: string;
+  date: string; // YYYY-MM-DD
+  label: string;
+  status: "PLANNED" | "SCHEDULED" | "DONE";
+};
+
 type FormState = {
   name: string;
   description: string;
   startDate: string;
   endDate: string;
+  bufferDays: number; // 0 = kein Puffer
+  deadline: string; // "" = keine Deadline
   progress: number;
   status: "OPEN" | "IN_PROGRESS" | "DONE";
   tradeCategoryId: string;
   isMilestone: boolean;
+  isTimeRange: boolean;
+  events: EventFormState[];
   color: string; // "" = keine Override
   assignedToId: string;
 };
+
+let nextTempEventId = 0;
+function makeTempEventId(): string {
+  nextTempEventId += 1;
+  return `new-${nextTempEventId}-${Date.now()}`;
+}
 
 function toYMD(iso: string | undefined | null): string {
   if (!iso) return "";
@@ -68,10 +96,14 @@ function emptyForm(): FormState {
     description: "",
     startDate: ymd,
     endDate: ymd,
+    bufferDays: 0,
+    deadline: "",
     progress: 0,
     status: "OPEN",
     tradeCategoryId: "",
     isMilestone: false,
+    isTimeRange: false,
+    events: [],
     color: "",
     assignedToId: "",
   };
@@ -103,10 +135,19 @@ export default function ScheduleItemModal({
         description: item.description ?? "",
         startDate: toYMD(item.startDate),
         endDate: toYMD(item.endDate),
+        bufferDays: item.bufferDays ?? 0,
+        deadline: toYMD(item.deadline),
         progress: item.progress,
         status: item.status,
         tradeCategoryId: item.tradeCategoryId ?? "",
         isMilestone: item.isMilestone,
+        isTimeRange: item.isTimeRange ?? false,
+        events: (item.events ?? []).map((ev) => ({
+          id: ev.id,
+          date: toYMD(ev.date),
+          label: ev.label ?? "",
+          status: ev.status,
+        })),
         color: item.color ?? "",
         assignedToId: item.assignedToId ?? "",
       });
@@ -180,6 +221,21 @@ export default function ScheduleItemModal({
         description: form.description.trim() || undefined,
         startDate: form.startDate,
         endDate: form.endDate,
+        // Milestone hat per Definition keine Dauer → kein Puffer.
+        bufferDays: form.isMilestone ? 0 : Math.max(0, Math.floor(form.bufferDays)),
+        deadline: form.deadline || null,
+        isTimeRange: form.isTimeRange,
+        // Events nur senden, wenn isTimeRange (sonst leer = delete all).
+        events: form.isTimeRange
+          ? form.events
+              .filter((ev) => ev.date) // unvollständige Events filtern
+              .map((ev, idx) => ({
+                date: ev.date,
+                label: ev.label.trim() || null,
+                status: ev.status,
+                orderIndex: idx,
+              }))
+          : [],
         progress: form.isMilestone ? 0 : form.progress,
         status: form.status,
         tradeCategoryId: form.tradeCategoryId || null,
@@ -318,27 +374,252 @@ export default function ScheduleItemModal({
             </div>
           </div>
 
-          {/* Milestone-Checkbox */}
-          <div>
+          {/* Milestone + Zeitraum: gegenseitig ausschließend */}
+          <div className="space-y-2">
             <label className="flex items-center gap-2 cursor-pointer select-none">
               <input
                 type="checkbox"
                 checked={form.isMilestone}
+                disabled={form.isTimeRange}
                 onChange={(e) =>
                   setForm((f) => ({
                     ...f,
                     isMilestone: e.target.checked,
-                    // Bei Milestone: end = start
+                    // Bei Milestone: end = start, kein Puffer
                     endDate: e.target.checked ? f.startDate : f.endDate,
+                    bufferDays: e.target.checked ? 0 : f.bufferDays,
                   }))
                 }
-                className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 disabled:opacity-50"
               />
-              <span className="text-sm text-gray-700">
+              <span className={`text-sm ${form.isTimeRange ? "text-gray-400" : "text-gray-700"}`}>
                 Ist Meilenstein (fester Stichtag ohne Dauer)
               </span>
             </label>
+
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={form.isTimeRange}
+                disabled={form.isMilestone}
+                onChange={(e) =>
+                  setForm((f) => ({
+                    ...f,
+                    isTimeRange: e.target.checked,
+                    // Zeitraum schließt Puffer + Progress aus (Zeitraum hat eigenes Event-Tracking)
+                    bufferDays: e.target.checked ? 0 : f.bufferDays,
+                  }))
+                }
+                className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 disabled:opacity-50"
+              />
+              <span className={`text-sm ${form.isMilestone ? "text-gray-400" : "text-gray-700"}`}>
+                Ist Zeitraum (z.B. „Modullieferung KW 14–15") mit Einzel-Events
+              </span>
+            </label>
           </div>
+
+          {/* Zeitraum-Events — nur wenn isTimeRange */}
+          {form.isTimeRange && (
+            <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-gray-700">
+                  Einzel-Events innerhalb des Zeitraums
+                </span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setForm((f) => ({
+                      ...f,
+                      events: [
+                        ...f.events,
+                        {
+                          id: makeTempEventId(),
+                          date: f.startDate,
+                          label: "",
+                          status: "PLANNED",
+                        },
+                      ],
+                    }))
+                  }
+                  className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-100 rounded transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Event
+                </button>
+              </div>
+              {form.events.length === 0 ? (
+                <p className="text-xs text-gray-400 italic">
+                  Noch keine Events. Beispiel: „Teillieferung 1" am konkreten Tag.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {form.events.map((ev, idx) => (
+                    <div
+                      key={ev.id}
+                      className="flex items-center gap-2 bg-white rounded-lg p-2 border border-gray-200"
+                    >
+                      <div className="w-32 shrink-0">
+                        <DatePicker
+                          value={ev.date}
+                          onChange={(v) =>
+                            setForm((f) => {
+                              const events = [...f.events];
+                              events[idx] = { ...events[idx], date: v };
+                              return { ...f, events };
+                            })
+                          }
+                        />
+                      </div>
+                      <input
+                        type="text"
+                        value={ev.label}
+                        onChange={(e) =>
+                          setForm((f) => {
+                            const events = [...f.events];
+                            events[idx] = { ...events[idx], label: e.target.value };
+                            return { ...f, events };
+                          })
+                        }
+                        placeholder={`Label (optional, z.B. „Teillieferung 1")`}
+                        className="flex-1 px-2 py-1 text-sm border border-gray-200 rounded focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      />
+                      <select
+                        value={ev.status}
+                        onChange={(e) =>
+                          setForm((f) => {
+                            const events = [...f.events];
+                            events[idx] = {
+                              ...events[idx],
+                              status: e.target.value as EventFormState["status"],
+                            };
+                            return { ...f, events };
+                          })
+                        }
+                        className="w-40 px-2 py-1 text-sm border border-gray-200 rounded bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      >
+                        <option value="PLANNED">Geplant (noch offen)</option>
+                        <option value="SCHEDULED">Abgestimmt</option>
+                        <option value="DONE">Erledigt</option>
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setForm((f) => ({
+                            ...f,
+                            events: f.events.filter((_, i) => i !== idx),
+                          }))
+                        }
+                        className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+                        title="Event entfernen"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <p className="text-xs text-gray-400">
+                Events werden im Gantt als farbige Kästchen im Zeitraum dargestellt.
+                <span className="inline-block w-2 h-2 rounded-sm bg-gray-200 border border-dashed border-gray-500 mx-1 align-middle" />
+                geplant,
+                <span className="inline-block w-2 h-2 rounded-sm bg-blue-600 mx-1 align-middle" />
+                abgestimmt,
+                <span className="inline-block w-2 h-2 rounded-sm bg-emerald-500 mx-1 align-middle" />
+                erledigt.
+              </p>
+            </div>
+          )}
+
+          {/* Deadline — harter Termin, mit rotem Flag im Gantt markiert.
+              Kann unabhängig von endDate + bufferDays gesetzt werden
+              (z.B. für Förderzusage, Netzzusage). */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1.5">
+              <Flag className="w-3.5 h-3.5 text-red-500" style={{ fill: "currentColor" }} />
+              Deadline
+              <span className="text-xs font-normal text-gray-400">
+                (optional, als rotes Flag im Gantt)
+              </span>
+            </label>
+            <div className="flex items-center gap-2">
+              <div className="flex-1">
+                <DatePicker
+                  value={form.deadline}
+                  onChange={(v) => setForm((f) => ({ ...f, deadline: v }))}
+                />
+              </div>
+              {form.deadline && (
+                <button
+                  type="button"
+                  onClick={() => setForm((f) => ({ ...f, deadline: "" }))}
+                  className="px-2 py-1.5 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                  title="Deadline entfernen"
+                >
+                  Entfernen
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Puffer — nur für normale Arbeitspakete, nicht für Milestones. */}
+          {!form.isMilestone && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1.5">
+                Puffer nach Ende
+                <span className="text-xs font-normal text-gray-400">
+                  (optional, wird schraffiert dargestellt)
+                </span>
+              </label>
+              <div className="flex items-center gap-3">
+                <input
+                  type="number"
+                  min={0}
+                  max={365}
+                  step={1}
+                  value={form.bufferDays}
+                  onChange={(e) => {
+                    const v = Math.max(0, Math.min(365, Number(e.target.value)));
+                    setForm((f) => ({
+                      ...f,
+                      bufferDays: isNaN(v) ? 0 : v,
+                    }));
+                  }}
+                  className="w-24 px-3 py-2 border border-gray-200 rounded-lg text-sm text-right focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+                <span className="text-sm text-gray-500">
+                  Arbeitstage
+                </span>
+                {/* Mini-Preview: zeigt Kern-Balken + Puffer, damit der User
+                    den visuellen Effekt direkt sieht, bevor er speichert. */}
+                <div className="flex-1 flex items-center gap-0 h-5">
+                  <div
+                    className={`h-full rounded-l-sm bg-${previewColor}-500`}
+                    style={{ width: form.bufferDays > 0 ? "55%" : "100%" }}
+                  />
+                  {form.bufferDays > 0 && (
+                    <div
+                      className={`h-3 self-center rounded-r-sm bg-${previewColor}-100 border border-dashed border-${previewColor}-400 relative overflow-hidden`}
+                      style={{ width: "45%" }}
+                    >
+                      <span
+                        className={`absolute inset-0 text-${previewColor}-400`}
+                        style={{
+                          backgroundImage:
+                            "repeating-linear-gradient(135deg, currentColor 0, currentColor 2px, transparent 2px, transparent 6px)",
+                          opacity: 0.45,
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+              <p className="mt-1 text-xs text-gray-400">
+                z.B. „Kern 10 Arbeitstage + Puffer 5" → 5 Tage Luft für
+                Unvorhergesehenes. Cascade-Move nutzt weiterhin das Ende der
+                Kern-Arbeit.
+              </p>
+            </div>
+          )}
 
           {/* Fortschritt */}
           {!form.isMilestone && (
@@ -415,7 +696,7 @@ export default function ScheduleItemModal({
             </div>
           </div>
 
-          {/* Farb-Override */}
+          {/* Farb-Override — kuratierte Palette (12 Farben + „Kein Override"). */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1.5">
               <Palette className="w-3.5 h-3.5 text-gray-400" />
@@ -424,27 +705,27 @@ export default function ScheduleItemModal({
                 (optional; überschreibt die Gewerk-Farbe)
               </span>
             </label>
-            <div className="grid grid-cols-11 gap-1.5">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 onClick={() => setForm((f) => ({ ...f, color: "" }))}
-                className={`w-7 h-7 rounded-full border-2 bg-white flex items-center justify-center text-[10px] text-gray-500 transition-all ${
+                className={`w-7 h-7 rounded-full border-2 bg-white flex items-center justify-center text-[11px] text-gray-500 transition-all shrink-0 ${
                   form.color === ""
                     ? "ring-2 ring-offset-1 ring-gray-900 border-gray-400"
                     : "border-gray-200 hover:border-gray-400"
                 }`}
-                title="Keine Override"
+                title="Keine Override (Gewerk-Farbe verwenden)"
               >
                 ×
               </button>
-              {TERMINPLAN_COLORS.map((c) => {
+              {PALETTE_COLORS.map((c) => {
                 const selected = form.color === c;
                 return (
                   <button
                     key={c}
                     type="button"
                     onClick={() => setForm((f) => ({ ...f, color: c }))}
-                    className={`w-7 h-7 rounded-full bg-${c}-500 transition-all ${
+                    className={`w-7 h-7 rounded-full bg-${c}-500 transition-all shrink-0 ${
                       selected
                         ? "ring-2 ring-offset-1 ring-gray-900 scale-110"
                         : "hover:scale-105"

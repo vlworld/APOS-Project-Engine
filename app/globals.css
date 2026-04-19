@@ -1,5 +1,14 @@
 @import "tailwindcss";
 
+/* ─── Gewerk-Farb-Safelist (Tailwind v4) ──────────────────────────────────
+   Die Gewerk-Farben werden im Code via `bg-${color}-500` zusammengebaut.
+   Tailwind v4 erkennt Template-Literale nicht statisch, deshalb explizit
+   alle 21 Gewerk-Farben in allen benutzten Shades generieren lassen. */
+@source inline("bg-{slate,gray,zinc,stone,red,orange,amber,yellow,lime,green,emerald,teal,cyan,sky,blue,indigo,violet,purple,fuchsia,pink,rose}-{50,100,200,300,400,500,600,700}");
+@source inline("text-{slate,gray,zinc,stone,red,orange,amber,yellow,lime,green,emerald,teal,cyan,sky,blue,indigo,violet,purple,fuchsia,pink,rose}-{400,500,600,700}");
+@source inline("border-{slate,gray,zinc,stone,red,orange,amber,yellow,lime,green,emerald,teal,cyan,sky,blue,indigo,violet,purple,fuchsia,pink,rose}-{200,300,400,500}");
+@source inline("ring-{slate,gray,zinc,stone,red,orange,amber,yellow,lime,green,emerald,teal,cyan,sky,blue,indigo,violet,purple,fuchsia,pink,rose}-{200,300,400,500}");
+
 /* ─── Dark-Mode-Variante ──────────────────────────────────────────────────
    Wir nutzen class-basiertes Dark Mode (html.dark). Ein ".light"-Ancestor
    hebelt den Dark-Mode für seinen Teilbaum wieder aus — brauchen wir für
@@ -46,7 +55,7 @@ html.dark .light {
   color: #111827;
 }
 
-/* Druck immer hell */
+/* Druck immer hell + APOS-Print-Modus (PDF-Export aus Terminplan) */
 @media print {
   html.dark,
   html.dark body {
@@ -57,6 +66,47 @@ html.dark .light {
     background-color: initial;
     color: initial;
     border-color: initial;
+  }
+  /* APOS-Print-Modus: Sidebar + TopNav verstecken, Gantt voll */
+  body.apos-printing aside,
+  body.apos-printing header {
+    display: none !important;
+  }
+  body.apos-printing main {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  body.apos-printing main > div {
+    padding: 0 !important;
+  }
+  /* Toolbar / Tab-Bar / Filter-Buttons ausblenden — nur Gantt zeigen */
+  body.apos-printing button[type="button"]:not(.print-keep),
+  body.apos-printing select,
+  body.apos-printing [role="tablist"] {
+    display: none !important;
+  }
+  body.apos-printing [data-apos-fullscreen] {
+    position: static !important;
+    background: white !important;
+  }
+  /* Print-Header/Footer: im Print sichtbar, sonst versteckt.
+     .apos-print-only wird mit `hidden`-Tailwind-Klasse initial versteckt,
+     per Print-CSS wieder eingeblendet.
+     .apos-screen-only ist im Print ausgeblendet. */
+  body.apos-printing .apos-print-only {
+    display: block !important;
+  }
+  body.apos-printing .apos-screen-only {
+    display: none !important;
+  }
+  /* Sidebar-Toast/Modal-Layer im Print-Modus weg */
+  body.apos-printing .fixed {
+    position: static !important;
+  }
+  /* Querformat für breite Gantt-Charts */
+  @page {
+    size: A3 landscape;
+    margin: 1cm;
   }
 }
 

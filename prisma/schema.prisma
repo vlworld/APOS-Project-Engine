@@ -52,9 +52,14 @@ model User {
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   // Relationen
-  managedProjects      Project[]           @relation("ProjectManager")
-  projectMemberships   ProjectMember[]
-  undoEntries          ScheduleUndoEntry[]
+  managedProjects       Project[]            @relation("ProjectManager")
+  projectMemberships    ProjectMember[]
+  undoEntries           ScheduleUndoEntry[]
+  meetingsLed           Meeting[]            @relation("MeetingLeader")
+  meetingsScribed       Meeting[]            @relation("MeetingScribe")
+  meetingParticipations MeetingParticipant[]
+  responsibleItems      MeetingItem[]
+  assignedTodos         Todo[]
 
   @@index([organizationId])
   @@index([role])
@@ -102,6 +107,13 @@ model Project {
   bauherrCustomerId        String?
   landownerCustomerId      String?
 
+  // Sichtbarkeit fuer andere Projektleiter (User mit role=MANAGER) in derselben Organisation.
+  //   OPEN       = andere Manager koennen das Projekt sehen (Details lesen). Default.
+  //   RESTRICTED = nur Manager + Mitglieder des Projekts sehen es.
+  // ADMIN/DEVELOPER sehen immer alles; EMPLOYEES brauchen nach wie vor Membership.
+  visibility            String  @default("OPEN") // OPEN | RESTRICTED
+  allowEditByOthers     Boolean @default(false)  // Default: sehen ja, bearbeiten nein
+
   organization  Organization    @relation(fields: [organizationId], references: [id])
   manager       User            @relation("ProjectManager", fields: [managerId], references: [id])
   customer      Customer?       @relation("ProjectAuftraggeber", fields: [customerId], references: [id], onDelete: SetNull)
@@ -110,6 +122,8 @@ model Project {
   scheduleItems ScheduleItem[]
   members       ProjectMember[]
   briefing      ProjectBriefing?
+  meetings      Meeting[]
+  todos         Todo[]
 
   @@index([organizationId])
   @@index([managerId])
@@ -201,10 +215,13 @@ model ScheduleItem {
   description     String?
   startDate       DateTime
   endDate         DateTime
+  bufferDays      Int      @default(0) // Puffer in Arbeitstagen nach endDate (optional, schraffiert dargestellt)
+  deadline        DateTime? // Harte Deadline (optional) — z.B. Foerderzusage, Netzzusage. Mit rotem Flag im Gantt markiert.
   progress        Int      @default(0) // 0–100
   status          String   @default("OPEN") // OPEN | IN_PROGRESS | DONE
   tradeCategoryId String?
   isMilestone     Boolean  @default(false)
+  isTimeRange     Boolean  @default(false) // Fuzzy Zeitraum (z.B. "Modullieferung KW 14-15") mit diskreten Events
   color           String?  // optionaler Override, Default = tradeCategory.color
   orderIndex      Int      @default(0)
   assignedToId    String?  // optionaler User-Bezug (für Personal-View)
@@ -218,12 +235,32 @@ model ScheduleItem {
 
   dependenciesOut ScheduleDependency[] @relation("DependencyFrom")
   dependenciesIn  ScheduleDependency[] @relation("DependencyTo")
+  events          ScheduleItemEvent[]
 
   @@index([projectId])
   @@index([parentId])
   @@index([tradeCategoryId])
   @@index([assignedToId])
   @@index([status])
+}
+
+// Diskretes Event innerhalb eines Zeitraum-Items (isTimeRange = true).
+// z.B. "Modullieferung KW 14-15" hat Events: "Teillieferung 1 am 08.04"
+// (SCHEDULED) und "Teillieferung 2 KW 15" (PLANNED).
+model ScheduleItemEvent {
+  id        String   @id @default(cuid())
+  itemId    String
+  date      DateTime // Exakter Tag
+  label     String?  // z.B. "Teillieferung 1", "Modul-Container 2"
+  status    String   @default("PLANNED") // PLANNED (geplant, noch zu terminieren) | SCHEDULED (abgestimmt/terminiert) | DONE (erledigt)
+  orderIndex Int     @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  item ScheduleItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@index([itemId])
+  @@index([date])
 }
 
 model ScheduleDependency {
@@ -345,4 +382,144 @@ model ProjectBriefing {
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId])
+}
+
+// ─── Protokolle / Meetings ─────────────────────────────────────────────────
+// Strukturiertes Gesprächsprotokoll pro Projekt. Punkte (MeetingItem) sind
+// keine Freitext-Blöcke, sondern einzelne Entitäten — so können sie später
+// als ToDo übernommen oder in ein Folge-Protokoll kopiert werden.
+
+model Meeting {
+  id                String   @id @default(cuid())
+  projectId         String
+
+  // Kopfdaten (aus PDF-Vorlage)
+  title             String    // Thema, z.B. "PV-Anlage"
+  meetingDate       DateTime  // Datum des Termins
+  durationMinutes   Int?      // Zeitspanne in Minuten
+  location          String?   // Ort (z.B. "Teams", "Büro Ennepetal")
+  area              String?   // Bereich (freies Feld)
+  isInternal        Boolean   @default(true) // intern / extern
+
+  // Verantwortlichkeiten
+  leaderId          String?   // Leitung
+  scribeId          String?   // Protokollant
+
+  // Kette: Ein Protokoll kann auf einem Vorgänger aufbauen
+  previousMeetingId String?
+
+  // Freigabe-Workflow (optional — aus PDF: "Erarbeitet", "Geprüft", Rev.)
+  preparedByText    String?
+  approvedByText    String?
+  approvedAt        DateTime?
+  revisionNumber    Int       @default(0)
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  project           Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  leader            User?                @relation("MeetingLeader", fields: [leaderId], references: [id], onDelete: SetNull)
+  scribe            User?                @relation("MeetingScribe", fields: [scribeId], references: [id], onDelete: SetNull)
+  previousMeeting   Meeting?             @relation("MeetingChain", fields: [previousMeetingId], references: [id], onDelete: SetNull)
+  nextMeetings      Meeting[]            @relation("MeetingChain")
+  participants      MeetingParticipant[]
+  items             MeetingItem[]
+  sourceTodos       Todo[]               @relation("TodoFromMeeting")
+
+  @@index([projectId])
+  @@index([meetingDate])
+  @@index([leaderId])
+  @@index([scribeId])
+  @@index([previousMeetingId])
+}
+
+model MeetingParticipant {
+  id            String   @id @default(cuid())
+  meetingId     String
+  userId        String?  // APOS-User (strukturiert)
+  externalName  String?  // Fallback für externe Personen ("Hr. Sprenger")
+  roleText      String?  // z.B. "Geschäftsführung", "Monteur"
+  orderIndex    Int      @default(0)
+
+  meeting       Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  user          User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([meetingId])
+  @@index([userId])
+}
+
+model MeetingItem {
+  id                 String   @id @default(cuid())
+  meetingId          String
+  orderIndex         Int      @default(0)   // "Nr." in der PDF-Tabelle
+
+  // Inhalt
+  category           String?  // B (Beschluss) | E (Empfehlung) | F (Feststellung) | I (Info) | A (Arbeitsauftrag)
+  title              String?  // Kurz-Titel (z.B. "Wechselrichter")
+  description        String   // Haupttext
+
+  // Zuständigkeit
+  responsibleText    String?  // "SJM", "Vom Lehn" — Freitext (auch Firmen)
+  responsibleUserId  String?  // optional strukturiert
+
+  // Termin
+  dueDate            DateTime?
+  dueDateText        String?  // "KW 8", "Q1/23", "Ende Juli"
+
+  status             String   @default("OPEN") // OPEN | IN_PROGRESS | DONE
+
+  // Quelle: aus früherem Protokoll übernommen?
+  copiedFromItemId   String?
+
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  meeting            Meeting       @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  responsibleUser    User?         @relation(fields: [responsibleUserId], references: [id], onDelete: SetNull)
+  copiedFromItem     MeetingItem?  @relation("ItemCopy", fields: [copiedFromItemId], references: [id], onDelete: SetNull)
+  copies             MeetingItem[] @relation("ItemCopy")
+  sourceTodos        Todo[]        @relation("TodoFromItem")
+
+  @@index([meetingId])
+  @@index([status])
+  @@index([responsibleUserId])
+  @@index([copiedFromItemId])
+}
+
+// ─── ToDos ─────────────────────────────────────────────────────────────────
+// Generisches ToDo-System. ToDos entstehen v.a. aus Protokoll-Punkten
+// ("Übernehmen" aus MeetingItem), können aber auch direkt angelegt werden.
+// Ein ToDo kann optional einem Arbeitspaket zugeordnet werden —
+// workPackageId ist vorerst nur ein Placeholder-String, weil WP-Schema
+// noch nicht existiert.
+
+model Todo {
+  id                  String    @id @default(cuid())
+  projectId           String
+
+  title               String
+  description         String?
+  assignedToId        String?   // strukturiert
+  assignedToText      String?   // Freitext (extern)
+  dueDate             DateTime?
+  status              String    @default("OPEN") // OPEN | IN_PROGRESS | DONE
+
+  // Quellen
+  sourceMeetingItemId String?
+  sourceMeetingId     String?   // denormalisiert für schnelle Projekt-Queries
+  workPackageId       String?   // später: FK auf WorkPackage-Model
+
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  project             Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignedTo          User?         @relation(fields: [assignedToId], references: [id], onDelete: SetNull)
+  sourceMeetingItem   MeetingItem?  @relation("TodoFromItem", fields: [sourceMeetingItemId], references: [id], onDelete: SetNull)
+  sourceMeeting       Meeting?      @relation("TodoFromMeeting", fields: [sourceMeetingId], references: [id], onDelete: SetNull)
+
+  @@index([projectId])
+  @@index([assignedToId])
+  @@index([status])
+  @@index([sourceMeetingItemId])
+  @@index([sourceMeetingId])
 }

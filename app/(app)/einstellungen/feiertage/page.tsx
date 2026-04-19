@@ -288,7 +288,7 @@ export default function FeiertagePage() {
             Noch keine Feiertage angelegt
           </h2>
           <p className="text-sm text-gray-500 mb-4">
-            Lege Feiertage an, damit der Terminplan sie automatisch berücksichtigt.
+            Lege Feiertage an, damit der Bauzeitenplan sie automatisch berücksichtigt.
           </p>
           <button
             onClick={openCreateModal}
@@ -435,7 +435,7 @@ export default function FeiertagePage() {
       <ConfirmDialog
         open={confirmDelete !== null}
         title="Feiertag löschen?"
-        description="Der Feiertag wird aus der Organisation entfernt. Der Terminplan berücksichtigt ihn ab sofort nicht mehr."
+        description="Der Feiertag wird aus der Organisation entfernt. Der Bauzeitenplan berücksichtigt ihn ab sofort nicht mehr."
         confirmLabel="Löschen"
         destructive
         loading={deleting}

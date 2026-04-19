@@ -30,6 +30,8 @@ export type SessionUser = {
 type ProjectCore = {
   organizationId: string;
   managerId: string;
+  visibility?: string;
+  allowEditByOthers?: boolean;
 };
 
 type MemberLite = {
@@ -57,8 +59,12 @@ export function canReadProjectPure(
   const isMember = members.some((m) => m.userId === user.id);
   if (isMember) return true;
 
-  // Manager dürfen alle Projekte der Org sehen, Employees nur über Membership.
-  if (user.role === "MANAGER") return true;
+  // Manager dürfen Projekte der Org sehen, wenn sie OPEN (Default) sind.
+  // RESTRICTED blockiert alle nicht-Mitglieder ausser ADMIN/DEVELOPER.
+  if (user.role === "MANAGER") {
+    const visibility = project.visibility ?? "OPEN";
+    return visibility === "OPEN";
+  }
 
   return false;
 }
@@ -78,6 +84,13 @@ export function canWriteProjectPure(
   );
   if (writeMember) return true;
 
+  // Manager anderer Projekte duerfen dieses Projekt nur bearbeiten, wenn
+  // allowEditByOthers ausdruecklich erlaubt ist.
+  if (user.role === "MANAGER" && project.allowEditByOthers === true) {
+    const visibility = project.visibility ?? "OPEN";
+    if (visibility === "OPEN") return true;
+  }
+
   return false;
 }
 
@@ -94,6 +107,8 @@ async function fetchProjectWithMembers(
       name: string;
       projectNumber: string;
       status: string;
+      visibility: string;
+      allowEditByOthers: boolean;
       members: Array<{ userId: string; role: string }>;
     }
   | null
@@ -111,6 +126,8 @@ async function fetchProjectWithMembers(
     name: project.name,
     projectNumber: project.projectNumber,
     status: project.status,
+    visibility: project.visibility,
+    allowEditByOthers: project.allowEditByOthers,
     members: project.members.map((m) => ({ userId: m.userId, role: m.role })),
   };
 }
@@ -165,24 +182,34 @@ export async function listReadableProjects(user: SessionUser): Promise<
     projectNumber: string;
     status: string;
     managerId: string;
+    visibility: string;
+    allowEditByOthers: boolean;
   }>
 > {
-  // Admin/Developer/Manager sehen alle Projekte der Organisation.
-  // Employees sehen nur Projekte, bei denen sie Manager oder Mitglied sind.
-  const isOrgWide =
-    isAdminLike(user.role) || user.role === "MANAGER";
+  // ADMIN/DEVELOPER: alle Projekte der Organisation.
+  // MANAGER: alle eigenen/Mitglied-Projekte PLUS alle OPEN-sichtbaren.
+  // EMPLOYEE: nur eigene Manager-Projekte oder Projekte als Mitglied.
+  const isAdminFull = isAdminLike(user.role);
 
   const projects = await prisma.project.findMany({
     where: {
       organizationId: user.organizationId,
-      ...(isOrgWide
+      ...(isAdminFull
         ? {}
-        : {
-            OR: [
-              { managerId: user.id },
-              { members: { some: { userId: user.id } } },
-            ],
-          }),
+        : user.role === "MANAGER"
+          ? {
+              OR: [
+                { managerId: user.id },
+                { members: { some: { userId: user.id } } },
+                { visibility: "OPEN" },
+              ],
+            }
+          : {
+              OR: [
+                { managerId: user.id },
+                { members: { some: { userId: user.id } } },
+              ],
+            }),
     },
     select: {
       id: true,
@@ -190,6 +217,8 @@ export async function listReadableProjects(user: SessionUser): Promise<
       projectNumber: true,
       status: true,
       managerId: true,
+      visibility: true,
+      allowEditByOthers: true,
     },
     orderBy: { updatedAt: "desc" },
   });

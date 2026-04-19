@@ -17,6 +17,15 @@ import {
   X,
   ChevronDown,
 } from "lucide-react";
+import { useToast } from "@/components/ui/Toast";
+
+// Benutzer aus /api/einstellungen/benutzer — Felder, die wir fürs Dropdown brauchen.
+interface AvailableUser {
+  id: string;
+  name: string | null;
+  email: string;
+  kuerzel: string | null;
+}
 
 // ----- Types -----
 
@@ -40,6 +49,7 @@ interface Project {
 
 type ViewMode = "grid" | "list";
 type StatusFilter = "active" | "inactive" | "all";
+type ScopeFilter = "mine" | "all";
 type ProjectType = "PV" | "FFA" | "BESS";
 
 const PROJECT_TYPE_OPTIONS: { value: ProjectType; label: string }[] = [
@@ -139,14 +149,17 @@ function managerDisplayName(m: ProjectManager): string {
 // ----- Main Component -----
 
 export default function ProjektePage() {
+  const { toast } = useToast();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [availableUsers, setAvailableUsers] = useState<AvailableUser[]>([]);
 
   // View & Filters
   const [view, setView] = useState<ViewMode>("grid");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("active");
+  const [scopeFilter, setScopeFilter] = useState<ScopeFilter>("mine");
   const [managerFilter, setManagerFilter] = useState<string>("ALL");
   const [search, setSearch] = useState<string>("");
 
@@ -158,6 +171,8 @@ export default function ProjektePage() {
     startDate: "",
     endDate: "",
     description: "",
+    visibility: "OPEN" as "OPEN" | "RESTRICTED",
+    allowEditByOthers: false,
   });
 
   // Strukturierte Projektnummer
@@ -187,14 +202,15 @@ export default function ProjektePage() {
 
   const fetchProjects = useCallback(async () => {
     try {
-      const res = await fetch("/api/projekte");
+      const url = scopeFilter === "mine" ? "/api/projekte?scope=mine" : "/api/projekte";
+      const res = await fetch(url);
       if (res.ok) {
         setProjects(await res.json());
       }
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [scopeFilter]);
 
   useEffect(() => {
     fetchProjects();
@@ -225,6 +241,26 @@ export default function ProjektePage() {
     }
   }, [showForm, nextSuggestedNumber, projectNumberDigits]);
 
+  // Benutzerliste fürs Projektleiter-Dropdown beim ersten Öffnen des Modals laden.
+  useEffect(() => {
+    if (!showForm) return;
+    if (availableUsers.length > 0) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/einstellungen/benutzer");
+        if (!res.ok) return;
+        const users = (await res.json()) as AvailableUser[];
+        if (!cancelled) setAvailableUsers(users);
+      } catch {
+        // Stiller Fehler — der User merkt es am leeren Dropdown.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [showForm, availableUsers.length]);
+
   function resetForm() {
     setFormData({
       name: "",
@@ -233,6 +269,8 @@ export default function ProjektePage() {
       startDate: "",
       endDate: "",
       description: "",
+      visibility: "OPEN",
+      allowEditByOthers: false,
     });
     setProjectNumberDigits("");
     setProjectType("FFA");
@@ -260,7 +298,33 @@ export default function ProjektePage() {
         setShowForm(false);
         resetForm();
         fetchProjects();
+        toast({
+          title: "Projekt angelegt",
+          description: projectNumber,
+          variant: "success",
+        });
+      } else {
+        // Fehler-Response vom Server lesen und als Toast anzeigen.
+        const body: unknown = await res.json().catch(() => ({}));
+        const msg =
+          typeof body === "object" &&
+          body !== null &&
+          "error" in body &&
+          typeof (body as { error: unknown }).error === "string"
+            ? (body as { error: string }).error
+            : `Fehler ${res.status}`;
+        toast({
+          title: "Anlegen fehlgeschlagen",
+          description: msg,
+          variant: "error",
+        });
       }
+    } catch (err) {
+      toast({
+        title: "Netzwerkfehler",
+        description: err instanceof Error ? err.message : "Unbekannter Fehler",
+        variant: "error",
+      });
     } finally {
       setSaving(false);
     }
@@ -370,6 +434,32 @@ export default function ProjektePage() {
 
       {/* Filter-Leiste */}
       <div className="flex flex-wrap items-center gap-3 mb-5">
+        {/* Scope-Toggle: Meine / Alle Projekte */}
+        <div className="flex items-center gap-0.5 bg-gray-100 rounded-lg p-0.5">
+          <button
+            type="button"
+            onClick={() => setScopeFilter("mine")}
+            className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+              scopeFilter === "mine"
+                ? "bg-white text-gray-900 shadow-sm"
+                : "text-gray-600 hover:text-gray-900"
+            }`}
+          >
+            Meine Projekte
+          </button>
+          <button
+            type="button"
+            onClick={() => setScopeFilter("all")}
+            className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+              scopeFilter === "all"
+                ? "bg-white text-gray-900 shadow-sm"
+                : "text-gray-600 hover:text-gray-900"
+            }`}
+          >
+            Alle Projekte
+          </button>
+        </div>
+
         {/* Status-Toggle */}
         <div className="flex items-center gap-0.5 bg-gray-100 rounded-lg p-0.5">
           {STATUS_FILTER_OPTIONS.map((o) => (
@@ -524,16 +614,40 @@ export default function ProjektePage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Projektleiter-ID *
+                  Projektleiter *
                 </label>
-                <input
-                  type="text"
-                  value={formData.managerId}
-                  onChange={(e) => setFormData((f) => ({ ...f, managerId: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
-                  placeholder="User-ID des Projektleiters"
-                  required
-                />
+                <div className="relative">
+                  <select
+                    value={formData.managerId}
+                    onChange={(e) =>
+                      setFormData((f) => ({ ...f, managerId: e.target.value }))
+                    }
+                    className={`appearance-none w-full pl-3 pr-8 py-2 border rounded-lg text-sm bg-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none cursor-pointer ${
+                      !managerValid ? "border-red-400" : "border-gray-300"
+                    }`}
+                    required
+                  >
+                    <option value="">— Bitte wählen —</option>
+                    {availableUsers.map((u) => {
+                      const label = u.name
+                        ? u.kuerzel
+                          ? `${u.name} (${u.kuerzel})`
+                          : u.name
+                        : u.email;
+                      return (
+                        <option key={u.id} value={u.id}>
+                          {label}
+                        </option>
+                      );
+                    })}
+                  </select>
+                  <ChevronDown className="w-4 h-4 text-gray-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                </div>
+                {availableUsers.length === 0 && (
+                  <p className="mt-1 text-xs text-gray-400">
+                    Benutzerliste wird geladen…
+                  </p>
+                )}
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -577,6 +691,65 @@ export default function ProjektePage() {
                   placeholder="Kurzbeschreibung des Projekts..."
                 />
               </div>
+
+              {/* Sichtbarkeit für andere Projektleiter */}
+              <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 space-y-2">
+                <div className="text-sm font-medium text-gray-700 mb-1">
+                  Sichtbarkeit für andere Projektleiter
+                </div>
+                <label className="flex items-start gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={formData.visibility === "OPEN"}
+                    onChange={(e) =>
+                      setFormData((f) => ({
+                        ...f,
+                        visibility: e.target.checked ? "OPEN" : "RESTRICTED",
+                        // Wenn nicht mehr sichtbar, kann auch nicht bearbeitet werden
+                        allowEditByOthers: e.target.checked ? f.allowEditByOthers : false,
+                      }))
+                    }
+                    className="w-4 h-4 mt-0.5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                  />
+                  <div>
+                    <div className="text-sm text-gray-700">
+                      Andere Projektleiter können das Projekt sehen
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      Admins und Mitglieder sehen das Projekt unabhängig hiervon.
+                    </div>
+                  </div>
+                </label>
+                <label
+                  className={`flex items-start gap-2 select-none ${
+                    formData.visibility === "OPEN"
+                      ? "cursor-pointer"
+                      : "cursor-not-allowed opacity-50"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={formData.allowEditByOthers}
+                    disabled={formData.visibility !== "OPEN"}
+                    onChange={(e) =>
+                      setFormData((f) => ({
+                        ...f,
+                        allowEditByOthers: e.target.checked,
+                      }))
+                    }
+                    className="w-4 h-4 mt-0.5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 disabled:opacity-50"
+                  />
+                  <div>
+                    <div className="text-sm text-gray-700">
+                      Andere Projektleiter können das Projekt bearbeiten
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      Standardmäßig: sehen ja, bearbeiten nein.
+                    </div>
+                  </div>
+                </label>
+              </div>
+
               <div className="flex justify-end gap-3 pt-2">
                 <button
                   type="button"

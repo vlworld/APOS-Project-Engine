@@ -20,6 +20,7 @@ prisma/generated/
 # Build output
 dist/
 build/
+*.tsbuildinfo
 
 # Debug logs
 npm-debug.log*
