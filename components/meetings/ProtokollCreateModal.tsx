@@ -6,17 +6,22 @@
 // - Body-Scroll-Lock, Klick auf Backdrop schliesst.
 // - Nach Speichern: Redirect zu /protokolle/[meetingId].
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { X, Loader2, Plus, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { X, Loader2, Plus, Trash2, Video, MapPin, Building2, Briefcase, UserPlus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import DatePicker from "@/components/ui/DatePicker";
 import { useToast } from "@/components/ui/Toast";
 import type {
   CreateMeetingInput,
   MeetingDetailDTO,
+  MeetingParticipantDTO,
   MeetingSummaryDTO,
   ParticipantInput,
 } from "@/lib/meetings/types";
+
+// Apricus-Default-Adresse — hart verdrahtet, solange Organization.address
+// als UI-Feld noch nicht gepflegt werden kann.
+const APRICUS_ADDRESS = "Apricus Solar AG, Dortmund";
 
 // ─── Helper-Types ──────────────────────────────────────────────────────────
 
@@ -39,11 +44,29 @@ interface ApiMember {
   role: "READ" | "WRITE";
 }
 
+interface ApiCustomer {
+  id: string;
+  companyName: string;
+  street: string | null;
+  zipCode: string | null;
+  city: string | null;
+}
+
 interface ApiProject {
   id: string;
   name: string;
   manager: ProjectManagerUser;
   managerId: string;
+  address: string | null;
+  clientName: string | null;
+  customer: ApiCustomer | null;
+}
+
+// Suggestion = User, der in einem vorherigen Meeting mit gleichem Titel
+// teilgenommen hat (aggregiert ueber alle Treffer).
+interface ParticipantSuggestion {
+  userId: string;
+  name: string;
 }
 
 interface ProtokollCreateModalProps {
@@ -87,6 +110,15 @@ export default function ProtokollCreateModal({
   const [currentUserId, setCurrentUserId] = useState<string>("");
   const [loadingData, setLoadingData] = useState(false);
 
+  // Ort-Quick-Add-Daten aus dem Projekt (address + customer)
+  const [projectAddress, setProjectAddress] = useState<string>("");
+  const [customerAddress, setCustomerAddress] = useState<string>("");
+
+  // Teilnehmer-Vorschlaege: User, die in Meetings mit gleichem Titel dabei waren
+  const [suggestedParticipants, setSuggestedParticipants] = useState<
+    ParticipantSuggestion[]
+  >([]);
+
   // Teilnehmer (Checkbox-Liste + externe Freitext-Eintraege)
   const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(
     new Set(),
@@ -97,6 +129,67 @@ export default function ProtokollCreateModal({
   const [externalInput, setExternalInput] = useState("");
 
   const [saving, setSaving] = useState(false);
+
+  // Teilnehmer-Vorschlaege: bei title-Change schauen, ob es Vorgaenger-Meetings
+  // mit dem gleichen Titel (case-insensitive) gibt, deren Teilnehmer wir dann
+  // als Quick-Add-Vorschlaege anzeigen. Debounced, damit nicht jeder Tastenanschlag
+  // einen Fetch ausloest.
+  useEffect(() => {
+    const needle = title.trim().toLowerCase();
+    if (!needle || previousMeetings.length === 0) {
+      setSuggestedParticipants([]);
+      return;
+    }
+    const matches = previousMeetings.filter(
+      (m) => m.title.trim().toLowerCase() === needle,
+    );
+    if (matches.length === 0) {
+      setSuggestedParticipants([]);
+      return;
+    }
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      try {
+        // Participants pro Match-Meeting laden, dann aggregieren
+        const details = await Promise.all(
+          matches.map((m) =>
+            fetch(`/api/projekte/${projectId}/protokolle/${m.id}`).then((r) =>
+              r.ok ? r.json() : null,
+            ),
+          ),
+        );
+        if (cancelled) return;
+        const byUserId = new Map<string, ParticipantSuggestion>();
+        // Name-Lookup via projectUsers (enthaelt mindestens Name + Email)
+        const userNameById = new Map<string, string>();
+        for (const u of projectUsers) userNameById.set(u.id, u.name);
+        for (const d of details) {
+          if (!d || !Array.isArray(d.participants)) continue;
+          for (const p of d.participants as MeetingParticipantDTO[]) {
+            if (p.userId && !byUserId.has(p.userId)) {
+              byUserId.set(p.userId, {
+                userId: p.userId,
+                name: userNameById.get(p.userId) ?? "Teilnehmer",
+              });
+            }
+          }
+        }
+        setSuggestedParticipants(Array.from(byUserId.values()));
+      } catch {
+        /* ignore */
+      }
+    }, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [title, previousMeetings, projectId, projectUsers]);
+
+  // Vorschläge, die noch nicht ausgewählt sind (gefiltert für die UI)
+  const unselectedSuggestions = useMemo(
+    () => suggestedParticipants.filter((s) => !selectedUserIds.has(s.userId)),
+    [suggestedParticipants, selectedUserIds],
+  );
 
   // Reset beim Oeffnen
   useEffect(() => {
@@ -135,6 +228,23 @@ export default function ProtokollCreateModal({
         const proj = (await projectRes.json()) as Partial<ApiProject>;
         if (proj.manager) projectManager = proj.manager;
         if (typeof proj.managerId === "string") projectManagerId = proj.managerId;
+        // Baustellen-Adresse (aus Project.address)
+        setProjectAddress(proj.address?.trim() ?? "");
+        // Kunden-Adresse: companyName + Straße + PLZ/Ort, wenn vorhanden
+        if (proj.customer) {
+          const c = proj.customer;
+          const parts = [
+            c.companyName,
+            c.street,
+            [c.zipCode, c.city].filter(Boolean).join(" ").trim() || null,
+          ].filter((s): s is string => Boolean(s && s.trim()));
+          setCustomerAddress(parts.join(", "));
+        } else if (proj.clientName) {
+          // Fallback auf legacy clientName
+          setCustomerAddress(proj.clientName);
+        } else {
+          setCustomerAddress("");
+        }
       }
       if (membersRes.ok) {
         const data = (await membersRes.json()) as { members: ApiMember[] };
@@ -387,6 +497,55 @@ export default function ProtokollCreateModal({
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                 placeholder="Teams, Büro Ennepetal, …"
               />
+              {/* Quick-Adds für häufige Orte */}
+              <div className="flex flex-wrap gap-1 mt-1.5">
+                <button
+                  type="button"
+                  onClick={() => setLocation("Teams")}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] bg-gray-100 hover:bg-gray-200 rounded-full text-gray-600 transition-colors"
+                  title="Virtuelles Meeting (Teams, Meet)"
+                >
+                  <Video className="w-3 h-3" />
+                  Virtuell
+                </button>
+                <button
+                  type="button"
+                  onClick={() => projectAddress && setLocation(projectAddress)}
+                  disabled={!projectAddress}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] bg-gray-100 hover:bg-gray-200 rounded-full text-gray-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  title={
+                    projectAddress
+                      ? `Baustellen-Adresse: ${projectAddress}`
+                      : "Keine Baustellen-Adresse am Projekt hinterlegt"
+                  }
+                >
+                  <MapPin className="w-3 h-3" />
+                  Baustelle
+                </button>
+                <button
+                  type="button"
+                  onClick={() => customerAddress && setLocation(customerAddress)}
+                  disabled={!customerAddress}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] bg-gray-100 hover:bg-gray-200 rounded-full text-gray-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  title={
+                    customerAddress
+                      ? `Kunden-Adresse: ${customerAddress}`
+                      : "Kein Kunde am Projekt hinterlegt"
+                  }
+                >
+                  <Building2 className="w-3 h-3" />
+                  Kunde
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLocation(APRICUS_ADDRESS)}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] bg-gray-100 hover:bg-gray-200 rounded-full text-gray-600 transition-colors"
+                  title={APRICUS_ADDRESS}
+                >
+                  <Briefcase className="w-3 h-3" />
+                  Apricus
+                </button>
+              </div>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -498,6 +657,30 @@ export default function ProtokollCreateModal({
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Teilnehmer
             </label>
+            {/* Vorschläge aus Meetings mit gleichem Titel */}
+            {unselectedSuggestions.length > 0 && (
+              <div className="mb-2 bg-blue-50 border border-blue-100 rounded-lg p-2">
+                <div className="flex items-center gap-1.5 mb-1.5 text-[11px] text-blue-700">
+                  <UserPlus className="w-3 h-3" />
+                  <span className="font-medium">
+                    Vorschläge aus früheren „{title.trim()}"-Meetings:
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {unselectedSuggestions.map((s) => (
+                    <button
+                      key={s.userId}
+                      type="button"
+                      onClick={() => toggleUserParticipant(s.userId)}
+                      className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] bg-white hover:bg-blue-100 border border-blue-200 rounded-full text-blue-700 transition-colors"
+                    >
+                      <Plus className="w-3 h-3" />
+                      {s.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             {loadingData ? (
               <div className="flex items-center gap-2 text-xs text-gray-500">
                 <Loader2 className="w-3 h-3 animate-spin" /> Lade Projekt-Kontext …

@@ -14,6 +14,15 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
     where: { id, organizationId: session!.user.organizationId },
     include: {
       manager: { select: { id: true, name: true, email: true } },
+      customer: {
+        select: {
+          id: true,
+          companyName: true,
+          street: true,
+          zipCode: true,
+          city: true,
+        },
+      },
     },
   });
 
