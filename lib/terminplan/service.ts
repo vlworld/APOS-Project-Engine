@@ -114,6 +114,7 @@ function toScheduleItemDTO(
     startDate: row.startDate.toISOString(),
     endDate: row.endDate.toISOString(),
     bufferDays: row.bufferDays,
+    deadline: row.deadline ? row.deadline.toISOString() : null,
     progress: row.progress,
     status: row.status as ScheduleItemStatus,
     tradeCategoryId: row.tradeCategoryId,
@@ -413,6 +414,7 @@ export async function createScheduleItem(
       startDate: start,
       endDate: end,
       bufferDays: Math.max(0, Math.floor(input.bufferDays ?? 0)),
+      deadline: input.deadline ? parseDateInput(input.deadline) : null,
       progress,
       status,
       tradeCategoryId: input.tradeCategoryId ?? null,
@@ -514,6 +516,10 @@ export async function updateScheduleItem(
   if (input.orderIndex !== undefined) data.orderIndex = input.orderIndex;
   if (input.bufferDays !== undefined) {
     data.bufferDays = Math.max(0, Math.floor(input.bufferDays));
+  }
+
+  if (input.deadline !== undefined) {
+    data.deadline = input.deadline ? parseDateInput(input.deadline) : null;
   }
 
   if (input.assignedToId !== undefined) {

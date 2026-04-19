@@ -16,6 +16,7 @@ export type ScheduleItemDTO = {
   startDate: string; // ISO-String
   endDate: string;
   bufferDays: number; // Puffer in Arbeitstagen nach endDate (visuell schraffiert)
+  deadline: string | null; // Harte Deadline (ISO-String) — rotes Flag im Gantt
   progress: number; // 0–100
   status: ScheduleItemStatus;
   tradeCategoryId: string | null;
@@ -58,6 +59,7 @@ export type CreateScheduleItemInput = {
   startDate: string; // "YYYY-MM-DD"
   endDate: string;
   bufferDays?: number;
+  deadline?: string | null; // "YYYY-MM-DD" oder ISO; null = keine Deadline
   progress?: number;
   status?: ScheduleItemStatus;
   tradeCategoryId?: string | null;

@@ -6,7 +6,7 @@
 // - Optional: Farb-Override über Farb-Picker.
 
 import { useEffect, useState, useRef, useMemo } from "react";
-import { X, Loader2, Palette } from "lucide-react";
+import { X, Loader2, Palette, Flag } from "lucide-react";
 import DatePicker from "@/components/ui/DatePicker";
 import { useToast } from "@/components/ui/Toast";
 import type {
@@ -52,6 +52,7 @@ type FormState = {
   startDate: string;
   endDate: string;
   bufferDays: number; // 0 = kein Puffer
+  deadline: string; // "" = keine Deadline
   progress: number;
   status: "OPEN" | "IN_PROGRESS" | "DONE";
   tradeCategoryId: string;
@@ -80,6 +81,7 @@ function emptyForm(): FormState {
     startDate: ymd,
     endDate: ymd,
     bufferDays: 0,
+    deadline: "",
     progress: 0,
     status: "OPEN",
     tradeCategoryId: "",
@@ -116,6 +118,7 @@ export default function ScheduleItemModal({
         startDate: toYMD(item.startDate),
         endDate: toYMD(item.endDate),
         bufferDays: item.bufferDays ?? 0,
+        deadline: toYMD(item.deadline),
         progress: item.progress,
         status: item.status,
         tradeCategoryId: item.tradeCategoryId ?? "",
@@ -195,6 +198,7 @@ export default function ScheduleItemModal({
         endDate: form.endDate,
         // Milestone hat per Definition keine Dauer → kein Puffer.
         bufferDays: form.isMilestone ? 0 : Math.max(0, Math.floor(form.bufferDays)),
+        deadline: form.deadline || null,
         progress: form.isMilestone ? 0 : form.progress,
         status: form.status,
         tradeCategoryId: form.tradeCategoryId || null,
@@ -354,6 +358,37 @@ export default function ScheduleItemModal({
                 Ist Meilenstein (fester Stichtag ohne Dauer)
               </span>
             </label>
+          </div>
+
+          {/* Deadline — harter Termin, mit rotem Flag im Gantt markiert.
+              Kann unabhängig von endDate + bufferDays gesetzt werden
+              (z.B. für Förderzusage, Netzzusage). */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1.5">
+              <Flag className="w-3.5 h-3.5 text-red-500" style={{ fill: "currentColor" }} />
+              Deadline
+              <span className="text-xs font-normal text-gray-400">
+                (optional, als rotes Flag im Gantt)
+              </span>
+            </label>
+            <div className="flex items-center gap-2">
+              <div className="flex-1">
+                <DatePicker
+                  value={form.deadline}
+                  onChange={(v) => setForm((f) => ({ ...f, deadline: v }))}
+                />
+              </div>
+              {form.deadline && (
+                <button
+                  type="button"
+                  onClick={() => setForm((f) => ({ ...f, deadline: "" }))}
+                  className="px-2 py-1.5 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                  title="Deadline entfernen"
+                >
+                  Entfernen
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Puffer — nur für normale Arbeitspakete, nicht für Milestones. */}

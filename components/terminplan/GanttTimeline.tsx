@@ -7,6 +7,7 @@
 //  - Dependency-Layer (SVG)
 
 import { useMemo, useRef } from "react";
+import { Flag } from "lucide-react";
 import type {
   ScheduleDependencyDTO,
   ScheduleItemDTO,
@@ -210,6 +211,37 @@ export default function GanttTimeline({
                 totalDays={totalDays}
                 onCommitMove={onCommitMove}
               />
+
+              {/* Deadline-Marker: rotes Flag + gestrichelte vertikale Linie.
+                  Nur wenn item.deadline gesetzt ist und im sichtbaren Range liegt. */}
+              {item.deadline && (() => {
+                const deadlineDate = new Date(item.deadline);
+                const offset = daysBetween(rangeStart, deadlineDate);
+                if (offset < 0 || offset > totalDays) return null;
+                const leftPct = (offset / totalDays) * 100;
+                const formatted = deadlineDate.toLocaleDateString("de-DE", {
+                  day: "2-digit",
+                  month: "2-digit",
+                  year: "numeric",
+                });
+                return (
+                  <div
+                    className="absolute top-0 bottom-0 pointer-events-none"
+                    style={{ left: `${leftPct}%`, zIndex: 8 }}
+                    title={`Deadline: ${formatted}`}
+                  >
+                    <div
+                      className="absolute top-0 bottom-0 border-l border-dashed border-red-500"
+                      style={{ opacity: 0.7 }}
+                    />
+                    <Flag
+                      className="absolute top-0.5 w-3.5 h-3.5 text-red-600 drop-shadow-sm"
+                      style={{ left: -6, fill: "currentColor" }}
+                      aria-label="Deadline"
+                    />
+                  </div>
+                );
+              })()}
             </div>
           );
         })}
