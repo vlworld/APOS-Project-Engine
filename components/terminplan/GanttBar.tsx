@@ -12,7 +12,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ScheduleItemDTO, TradeCategoryDTO } from "@/lib/terminplan/types";
-import { addDays, formatDateFull, pixelDeltaToDays } from "@/lib/terminplan/time";
+import { addDays, formatDateFull, pixelDeltaToDays, daysBetween } from "@/lib/terminplan/time";
 import { toDateKey } from "@/lib/terminplan/workdays";
 import { safeColor, type TerminplanColor } from "./TailwindColorSafelist";
 
@@ -314,6 +314,91 @@ export default function GanttBar({
             previewEnd={previewEnd}
             dragType={drag?.type}
             shift={drag?.shift ?? false}
+          />
+        )}
+      </>
+    );
+  }
+
+  // --- Zeitraum (isTimeRange) ------------------------------------------------
+  // Fuzzy-Bereich mit diskreten Events. Gestrichelter Rahmen, halbtransparent.
+  // Events als kleine Kästchen innerhalb, Status-farbig:
+  //   PLANNED   → grau, dashed (noch zu terminieren)
+  //   SCHEDULED → kräftige Gewerk-Farbe (abgestimmt)
+  //   DONE      → emerald (erledigt)
+  if (item.isTimeRange) {
+    const rangeStart = new Date(item.startDate);
+    const rangeEnd = new Date(item.endDate);
+    const rangeDays = Math.max(1, daysBetween(rangeStart, rangeEnd));
+    const trSafeWidth = `${Math.max(widthPercent, 0.5)}%`;
+    const trIsTiny = widthPercent < 3;
+    return (
+      <>
+        <div
+          className={`absolute top-1/2 rounded-md border-2 border-dashed bg-${color}-100 border-${color}-400`}
+          style={{
+            left,
+            width: trSafeWidth,
+            height: 22,
+            transform: "translateY(-50%)",
+            opacity: 0.85,
+          }}
+          onMouseEnter={() => setHovered(true)}
+          onMouseLeave={() => setHovered(false)}
+          onClick={handleClick}
+          role="button"
+          aria-label={`Zeitraum ${item.name}`}
+          title={`Zeitraum: ${item.name}`}
+        >
+          {/* Label */}
+          {!trIsTiny && (
+            <span className="absolute inset-0 flex items-center px-2 pointer-events-none">
+              <span className={`text-[10px] font-medium truncate text-${color}-800`}>
+                {item.name}
+              </span>
+            </span>
+          )}
+          {/* Events als Kästchen */}
+          {item.events.map((ev) => {
+            const eventDate = new Date(ev.date);
+            const offset = daysBetween(rangeStart, eventDate);
+            if (offset < 0 || offset > rangeDays) return null;
+            const leftPct = (offset / rangeDays) * 100;
+            const eventLabel = ev.label
+              ? `${ev.label} — ${formatDateFull(eventDate)}`
+              : formatDateFull(eventDate);
+            const statusLabel =
+              ev.status === "SCHEDULED"
+                ? "Abgestimmt"
+                : ev.status === "DONE"
+                  ? "Erledigt"
+                  : "Geplant";
+            return (
+              <div
+                key={ev.id}
+                className="absolute top-1/2 -translate-y-1/2 pointer-events-auto"
+                style={{ left: `${leftPct}%` }}
+                title={`${eventLabel} (${statusLabel})`}
+              >
+                <span
+                  className={`block w-2.5 h-3.5 -translate-x-1/2 rounded-sm border ${
+                    ev.status === "SCHEDULED"
+                      ? `bg-${color}-600 border-${color}-800`
+                      : ev.status === "DONE"
+                        ? "bg-emerald-500 border-emerald-700"
+                        : "bg-gray-200 border-gray-500 border-dashed"
+                  }`}
+                />
+              </div>
+            );
+          })}
+        </div>
+        {hovered && (
+          <BarTooltip
+            item={item}
+            tradeCategory={tradeCategory}
+            color={color}
+            leftPercent={leftPercent}
           />
         )}
       </>
