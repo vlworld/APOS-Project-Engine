@@ -51,6 +51,7 @@ type FormState = {
   description: string;
   startDate: string;
   endDate: string;
+  bufferDays: number; // 0 = kein Puffer
   progress: number;
   status: "OPEN" | "IN_PROGRESS" | "DONE";
   tradeCategoryId: string;
@@ -78,6 +79,7 @@ function emptyForm(): FormState {
     description: "",
     startDate: ymd,
     endDate: ymd,
+    bufferDays: 0,
     progress: 0,
     status: "OPEN",
     tradeCategoryId: "",
@@ -113,6 +115,7 @@ export default function ScheduleItemModal({
         description: item.description ?? "",
         startDate: toYMD(item.startDate),
         endDate: toYMD(item.endDate),
+        bufferDays: item.bufferDays ?? 0,
         progress: item.progress,
         status: item.status,
         tradeCategoryId: item.tradeCategoryId ?? "",
@@ -190,6 +193,8 @@ export default function ScheduleItemModal({
         description: form.description.trim() || undefined,
         startDate: form.startDate,
         endDate: form.endDate,
+        // Milestone hat per Definition keine Dauer → kein Puffer.
+        bufferDays: form.isMilestone ? 0 : Math.max(0, Math.floor(form.bufferDays)),
         progress: form.isMilestone ? 0 : form.progress,
         status: form.status,
         tradeCategoryId: form.tradeCategoryId || null,
@@ -338,8 +343,9 @@ export default function ScheduleItemModal({
                   setForm((f) => ({
                     ...f,
                     isMilestone: e.target.checked,
-                    // Bei Milestone: end = start
+                    // Bei Milestone: end = start, kein Puffer
                     endDate: e.target.checked ? f.startDate : f.endDate,
+                    bufferDays: e.target.checked ? 0 : f.bufferDays,
                   }))
                 }
                 className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
@@ -349,6 +355,66 @@ export default function ScheduleItemModal({
               </span>
             </label>
           </div>
+
+          {/* Puffer — nur für normale Arbeitspakete, nicht für Milestones. */}
+          {!form.isMilestone && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1.5">
+                Puffer nach Ende
+                <span className="text-xs font-normal text-gray-400">
+                  (optional, wird schraffiert dargestellt)
+                </span>
+              </label>
+              <div className="flex items-center gap-3">
+                <input
+                  type="number"
+                  min={0}
+                  max={365}
+                  step={1}
+                  value={form.bufferDays}
+                  onChange={(e) => {
+                    const v = Math.max(0, Math.min(365, Number(e.target.value)));
+                    setForm((f) => ({
+                      ...f,
+                      bufferDays: isNaN(v) ? 0 : v,
+                    }));
+                  }}
+                  className="w-24 px-3 py-2 border border-gray-200 rounded-lg text-sm text-right focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+                <span className="text-sm text-gray-500">
+                  Arbeitstage
+                </span>
+                {/* Mini-Preview: zeigt Kern-Balken + Puffer, damit der User
+                    den visuellen Effekt direkt sieht, bevor er speichert. */}
+                <div className="flex-1 flex items-center gap-0 h-5">
+                  <div
+                    className={`h-full rounded-l-sm bg-${previewColor}-500`}
+                    style={{ width: form.bufferDays > 0 ? "55%" : "100%" }}
+                  />
+                  {form.bufferDays > 0 && (
+                    <div
+                      className={`h-3 self-center rounded-r-sm bg-${previewColor}-100 border border-dashed border-${previewColor}-400 relative overflow-hidden`}
+                      style={{ width: "45%" }}
+                    >
+                      <span
+                        className={`absolute inset-0 text-${previewColor}-400`}
+                        style={{
+                          backgroundImage:
+                            "repeating-linear-gradient(135deg, currentColor 0, currentColor 2px, transparent 2px, transparent 6px)",
+                          opacity: 0.45,
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+              <p className="mt-1 text-xs text-gray-400">
+                z.B. „Kern 10 Arbeitstage + Puffer 5" → 5 Tage Luft für
+                Unvorhergesehenes. Cascade-Move nutzt weiterhin das Ende der
+                Kern-Arbeit.
+              </p>
+            </div>
+          )}
 
           {/* Fortschritt */}
           {!form.isMilestone && (

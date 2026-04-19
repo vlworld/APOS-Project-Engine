@@ -208,6 +208,7 @@ model ScheduleItem {
   description     String?
   startDate       DateTime
   endDate         DateTime
+  bufferDays      Int      @default(0) // Puffer in Arbeitstagen nach endDate (optional, schraffiert dargestellt)
   progress        Int      @default(0) // 0–100
   status          String   @default("OPEN") // OPEN | IN_PROGRESS | DONE
   tradeCategoryId String?

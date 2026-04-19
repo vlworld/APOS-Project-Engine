@@ -15,6 +15,7 @@ export type ScheduleItemDTO = {
   description: string | null;
   startDate: string; // ISO-String
   endDate: string;
+  bufferDays: number; // Puffer in Arbeitstagen nach endDate (visuell schraffiert)
   progress: number; // 0–100
   status: ScheduleItemStatus;
   tradeCategoryId: string | null;
@@ -56,6 +57,7 @@ export type CreateScheduleItemInput = {
   description?: string;
   startDate: string; // "YYYY-MM-DD"
   endDate: string;
+  bufferDays?: number;
   progress?: number;
   status?: ScheduleItemStatus;
   tradeCategoryId?: string | null;

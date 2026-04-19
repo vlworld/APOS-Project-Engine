@@ -471,6 +471,48 @@ export default function GanttBar({
         )}
       </div>
 
+      {/* --- Puffer-Balken --------------------------------------------------
+          Wenn bufferDays > 0: schraffierter, halbhoher Bereich direkt hinter
+          dem Kern-Balken. Arbeitstage werden über den Faktor 7/5 grob in
+          Kalendertage umgerechnet — exakt genug fürs Visual (Positionierung
+          per Prozent, kein Tag-genaues Snap).
+          Während Drag wird der Puffer ausgeblendet, damit er nicht mit
+          resize-end-Griffen kollidiert; nach dem Drag erscheint er wieder. */}
+      {item.bufferDays > 0 &&
+        typeof totalDays === "number" &&
+        totalDays > 0 &&
+        !drag && (() => {
+          const bufferCalendarDays = Math.max(1, Math.ceil((item.bufferDays * 7) / 5));
+          const bufferWidthPercent = (bufferCalendarDays / totalDays) * 100;
+          return (
+            <div
+              className="absolute top-1/2 pointer-events-none"
+              style={{
+                left: `calc(${left} + ${safeWidth})`,
+                width: `${bufferWidthPercent}%`,
+                height: 12,
+                transform: "translateY(-50%)",
+              }}
+              aria-label={`Puffer ${item.bufferDays} Arbeitstag${item.bufferDays === 1 ? "" : "e"}`}
+              title={`Puffer: ${item.bufferDays} Arbeitstag${item.bufferDays === 1 ? "" : "e"}`}
+            >
+              {/* Helle Basis in gleicher Farbe wie der Kern-Balken */}
+              <span
+                className={`absolute inset-0 rounded-sm bg-${color}-100 border border-dashed border-${color}-400 opacity-80`}
+              />
+              {/* Schraffur via currentColor-Trick */}
+              <span
+                className={`absolute inset-0 rounded-sm text-${color}-400`}
+                style={{
+                  backgroundImage:
+                    "repeating-linear-gradient(135deg, currentColor 0, currentColor 2px, transparent 2px, transparent 6px)",
+                  opacity: 0.45,
+                }}
+              />
+            </div>
+          );
+        })()}
+
       {(hovered || drag) && (
         <BarTooltip
           item={item}
@@ -540,6 +582,14 @@ function BarTooltip({
             <div>
               <span className="text-gray-400">Dauer:</span>{" "}
               {item.durationWorkdays} Arbeitstage
+              {item.bufferDays > 0 && (
+                <>
+                  <span className="text-gray-400 ml-2">+ Puffer:</span>{" "}
+                  <span className="text-amber-300">
+                    {item.bufferDays} AT
+                  </span>
+                </>
+              )}
             </div>
             <div>
               <span className="text-gray-400">Fortschritt:</span> {item.progress}{" "}
