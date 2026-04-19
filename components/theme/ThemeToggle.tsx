@@ -32,8 +32,16 @@ export default function ThemeToggle() {
     return () => mq.removeEventListener?.("change", handler);
   }, []);
 
-  async function handle(next: BinaryMode) {
-    if (mode === next) return;
+  // Toggle-Verhalten: jeder Klick — egal welcher Button — wechselt zwischen
+  // Hell und Dunkel. Das ist nutzerfreundlicher als "Klick auf aktiven
+  // Button macht nichts".
+  async function handle() {
+    const effectiveNow: BinaryMode = isSystem
+      ? systemDark
+        ? "dark"
+        : "light"
+      : mode;
+    const next: BinaryMode = effectiveNow === "dark" ? "light" : "dark";
     setSaving(next);
     try {
       await setMode(next);
@@ -58,7 +66,7 @@ export default function ThemeToggle() {
           <button
             key={key}
             type="button"
-            onClick={() => handle(key)}
+            onClick={() => handle()}
             disabled={!!saving}
             title={showSystemDot ? `${label} (System)` : label}
             aria-label={label}
