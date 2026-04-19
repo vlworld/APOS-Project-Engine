@@ -2,14 +2,47 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/api-helpers";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const { session, error } = await requireSession();
   if (error) return error;
 
-  // TODO(apos-extract): Expand schema with Project model from monorepo, then re-enable.
-  // Original: prisma.aposProject.findMany({ where: { organizationId: session.user.organizationId }, include: { manager: true } })
+  const user = session!.user;
+  const organizationId = user.organizationId;
+  const isAdminFull = user.role === "ADMIN" || user.role === "DEVELOPER";
+
+  // Scope-Filter (?scope=mine). Default = alles, was der User sehen darf
+  // (siehe listReadableProjects). "mine" filtert zusaetzlich auf
+  // Manager oder Mitglied.
+  const scope = req.nextUrl.searchParams.get("scope");
+  const onlyMine = scope === "mine";
+
   const projects = await prisma.project.findMany({
-    where: { organizationId: session!.user.organizationId },
+    where: {
+      organizationId,
+      ...(onlyMine
+        ? {
+            OR: [
+              { managerId: user.id },
+              { members: { some: { userId: user.id } } },
+            ],
+          }
+        : isAdminFull
+          ? {}
+          : user.role === "MANAGER"
+            ? {
+                OR: [
+                  { managerId: user.id },
+                  { members: { some: { userId: user.id } } },
+                  { visibility: "OPEN" },
+                ],
+              }
+            : {
+                OR: [
+                  { managerId: user.id },
+                  { members: { some: { userId: user.id } } },
+                ],
+              }),
+    },
     include: {
       manager: { select: { id: true, name: true, email: true, kuerzel: true } },
     },
@@ -24,7 +57,20 @@ export async function POST(req: NextRequest) {
   if (error) return error;
 
   const body = await req.json();
-  const { name, projectNumber, managerId, description, startDate, endDate, address, clientName, budget, status } = body;
+  const {
+    name,
+    projectNumber,
+    managerId,
+    description,
+    startDate,
+    endDate,
+    address,
+    clientName,
+    budget,
+    status,
+    visibility,
+    allowEditByOthers,
+  } = body;
 
   if (!name?.trim() || !projectNumber?.trim() || !managerId) {
     return NextResponse.json(
@@ -46,6 +92,8 @@ export async function POST(req: NextRequest) {
       endDate: endDate ? new Date(endDate) : null,
       status: status || "PLANNING",
       organizationId: session!.user.organizationId,
+      visibility: visibility === "RESTRICTED" ? "RESTRICTED" : "OPEN",
+      allowEditByOthers: allowEditByOthers === true,
     },
     include: {
       manager: { select: { id: true, name: true, email: true, kuerzel: true } },

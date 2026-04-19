@@ -107,6 +107,13 @@ model Project {
   bauherrCustomerId        String?
   landownerCustomerId      String?
 
+  // Sichtbarkeit fuer andere Projektleiter (User mit role=MANAGER) in derselben Organisation.
+  //   OPEN       = andere Manager koennen das Projekt sehen (Details lesen). Default.
+  //   RESTRICTED = nur Manager + Mitglieder des Projekts sehen es.
+  // ADMIN/DEVELOPER sehen immer alles; EMPLOYEES brauchen nach wie vor Membership.
+  visibility            String  @default("OPEN") // OPEN | RESTRICTED
+  allowEditByOthers     Boolean @default(false)  // Default: sehen ja, bearbeiten nein
+
   organization  Organization    @relation(fields: [organizationId], references: [id])
   manager       User            @relation("ProjectManager", fields: [managerId], references: [id])
   customer      Customer?       @relation("ProjectAuftraggeber", fields: [customerId], references: [id], onDelete: SetNull)
