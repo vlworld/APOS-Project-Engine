@@ -140,19 +140,33 @@ export default function GanttBar({
 
   const endDrag = useCallback(
     (commit: boolean) => {
+      // Aktuellen Drag-State zwischenspeichern. Der setState-Updater darf
+      // keine externen Seiteneffekte auslösen — sonst triggert commitDrag
+      // → onCommitMove → setData in GanttChart *während* GanttBar noch im
+      // Update-Zyklus ist ("Cannot update a component while rendering a
+      // different component").
+      // Wrapper-Objekt statt `let`, damit TS die Zuweisung im Callback
+      // nicht als Control-Flow-narrow verliert.
+      const snapshot: { value: DragState | null } = { value: null };
       setDrag((prev) => {
-        if (!prev) return null;
-        // Wenn tatsächlich bewegt: Click-Event der nächsten 250ms unterdrücken,
-        // damit nach Drag nicht versehentlich das Modal aufgeht.
-        if (Math.abs(prev.deltaDays) > 0) {
+        snapshot.value = prev;
+        return null;
+      });
+
+      // Seiteneffekte nach dem State-Reset ausführen
+      const finalState = snapshot.value;
+      if (finalState) {
+        if (Math.abs(finalState.deltaDays) > 0) {
+          // Click-Event der nächsten 250ms unterdrücken, damit nach Drag
+          // nicht versehentlich das Modal aufgeht.
           justDraggedRef.current = true;
           window.setTimeout(() => {
             justDraggedRef.current = false;
           }, 250);
         }
-        if (commit) commitDrag(prev);
-        return null;
-      });
+        if (commit) commitDrag(finalState);
+      }
+
       if (rafRef.current !== null) {
         cancelAnimationFrame(rafRef.current);
         rafRef.current = null;
