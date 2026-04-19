@@ -144,23 +144,19 @@ Parallel-Attacke mit 6 Agenten + Main-Thread:
   ~5 h Laufzeit den File-Watch für `(app)`-Routing-Groups). Falls die
   Änderung nicht sichtbar ist: Dev-Server neu starten.
 
-## Bekannte Bugs (Stand 2026-04-19, ungefixt)
+**Bugfix: React-Warnung im Gantt-DnD (Commit `2f7308f`)**
+- `GanttBar.endDrag` rief `commitDrag(prev)` *innerhalb* des
+  `setDrag`-Updaters auf → `onCommitMove` → `setData` in GanttChart
+  mid-update, React: "Cannot update a component while rendering a
+  different component". Snapshot des `prev`-State in ein Wrapper-Objekt
+  ausgelagert, Seiteneffekte laufen erst nach dem State-Reset.
 
-1. **React-Warnung beim Gantt-Drag** (keine UI-Auswirkung, aber muss weg):
-   Console-Error „Cannot update a component (GanttChart) while rendering
-   a different component (GanttBar)". Vermutliche Ursache: in
-   [GanttBar.tsx:143-155](components/terminplan/GanttBar.tsx:143) wird
-   `commitDrag(prev)` innerhalb des `setDrag((prev) => ...)`-Updaters
-   aufgerufen. `commitDrag` ruft `onCommitMove`, das synchron `setData`
-   in `GanttChart` triggert. React-State-Updater müssen pure sein.
-   **Fix-Skizze:** die aktuelle `prev`-Referenz in einem lokalen `let`
-   zwischenspeichern, im Updater nur `return null` machen und
-   `commitDrag` **nach** dem `setDrag`-Call (bzw. in einem
-   `useEffect`-Cleanup) aufrufen.
-
-2. **„Neues Projekt" aus dem Dashboard heraus funktioniert nicht** —
-   gemeldet 2026-04-19, noch nicht analysiert. Button/Link auf
-   `/dashboard` prüfen, inkl. Target-Route und ggf. Permission-Check.
+**Bugfix: „Neues Projekt"-Modal (Commit `2f7308f`)**
+- Projektleiter-Auswahl war ein Text-Feld, in das eine User-ID getippt
+  werden musste — durch natives `<select>` mit Liste aus
+  `/api/einstellungen/benutzer` ersetzt
+- API-Fehler wurden stumm verschluckt — jetzt Toast-Feedback:
+  Success (mit Projektnummer), Server-Error (mit Message), Netzwerkfehler
 
 ## Noch offen (priorisiert)
 
