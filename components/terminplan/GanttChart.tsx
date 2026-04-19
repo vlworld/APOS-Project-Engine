@@ -436,7 +436,7 @@ export default function GanttChart({ projectId, canEdit, fullHeight }: GanttChar
       <div className="bg-white border border-gray-200 rounded-2xl p-8 text-center">
         <AlertCircle className="w-10 h-10 text-amber-400 mx-auto mb-3" />
         <h3 className="text-sm font-semibold text-gray-800 mb-1">
-          Terminplan konnte nicht geladen werden
+          Bauzeitenplan konnte nicht geladen werden
         </h3>
         <p className="text-xs text-gray-500 max-w-md mx-auto">{error}</p>
       </div>

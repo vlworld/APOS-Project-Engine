@@ -54,16 +54,45 @@ export default function TerminplanTopPage() {
 
   const hasProjects = projects.length > 0;
 
+  const selectedProject = projects.find((p) => p.id === selectedProjectId);
+
   return (
     <div className="max-w-full min-w-0">
-      {/* Header — responsive: auf Mobile/Tablet stacken */}
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 mb-6">
+      {/* Print-Header — nur beim PDF-Export sichtbar (body.apos-printing) */}
+      <div className="apos-print-only mb-4 hidden" data-apos-print-header>
+        <div className="flex items-start justify-between gap-4 pb-3 border-b border-gray-400">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Bauzeitenplan</h1>
+            {selectedProject && (
+              <p className="text-sm text-gray-600 mt-0.5">
+                {selectedProject.projectNumber} — {selectedProject.name}
+              </p>
+            )}
+          </div>
+          {/* Logo oben rechts — aktuell hart Apricus-Platzhalter.
+              Echtes Logo folgt, wenn Organization.logoUrl-Upload gebaut ist. */}
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center">
+              <span className="text-white font-bold text-sm">A</span>
+            </div>
+            <div className="text-right">
+              <div className="text-sm font-semibold text-gray-900">
+                Apricus Solar AG
+              </div>
+              <div className="text-[10px] text-gray-500">Dortmund</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Screen-Header — im Print ausgeblendet */}
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 mb-6 apos-screen-only">
         <div className="flex items-center gap-3 min-w-0">
           <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center shrink-0">
             <GanttIcon className="w-5 h-5 text-purple-600" />
           </div>
           <div className="min-w-0">
-            <h1 className="text-xl font-bold text-gray-900">Terminplan</h1>
+            <h1 className="text-xl font-bold text-gray-900">Bauzeitenplan</h1>
             <p className="text-sm text-gray-500 truncate">
               Globale Ansicht — wähle ein Projekt, um den Bauzeitenplan zu öffnen.
             </p>
@@ -116,6 +145,11 @@ export default function TerminplanTopPage() {
       ) : (
         <TerminplanTabs projectId={selectedProjectId} canEdit={true} />
       )}
+
+      {/* Print-Footer — nur beim PDF-Export sichtbar */}
+      <div className="apos-print-only hidden text-[9px] text-gray-400 text-center mt-4 pt-2 border-t border-gray-300">
+        Ein APOS-Export · Apricus Project Operating System
+      </div>
     </div>
   );
 }

@@ -89,6 +89,16 @@ html.dark .light {
     position: static !important;
     background: white !important;
   }
+  /* Print-Header/Footer: im Print sichtbar, sonst versteckt.
+     .apos-print-only wird mit `hidden`-Tailwind-Klasse initial versteckt,
+     per Print-CSS wieder eingeblendet.
+     .apos-screen-only ist im Print ausgeblendet. */
+  body.apos-printing .apos-print-only {
+    display: block !important;
+  }
+  body.apos-printing .apos-screen-only {
+    display: none !important;
+  }
   /* Sidebar-Toast/Modal-Layer im Print-Modus weg */
   body.apos-printing .fixed {
     position: static !important;

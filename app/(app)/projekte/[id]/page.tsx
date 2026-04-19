@@ -139,7 +139,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
       enabled: true,
     },
     {
-      title: "Terminplan",
+      title: "Bauzeitenplan",
       href: `/projekte/${id}/terminplan`,
       icon: <CalendarRange className="w-5 h-5" />,
       color: "text-purple-600 bg-purple-100",

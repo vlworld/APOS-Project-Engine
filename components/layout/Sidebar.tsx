@@ -30,7 +30,7 @@ const moduleGroups: ModuleGroup[] = [
   {
     label: "Planung & Durchführung",
     items: [
-      { href: "/terminplan", icon: GanttChart, label: "Terminplan" },
+      { href: "/terminplan", icon: GanttChart, label: "Bauzeitenplan" },
       { href: "/beschaffung", icon: Truck, label: "Beschaffung" },
       { href: "/budget", icon: DollarSign, label: "Budget" },
     ],

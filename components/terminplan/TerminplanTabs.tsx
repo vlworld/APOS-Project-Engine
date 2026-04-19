@@ -93,7 +93,7 @@ export default function TerminplanTabs({
       <div className="flex items-center justify-between gap-2">
         <div
           role="tablist"
-          aria-label="Terminplan-Ansichten"
+          aria-label="Bauzeitenplan-Ansichten"
           className="inline-flex items-center gap-1 bg-white border border-gray-200 rounded-xl p-1"
         >
           {tabs.map(({ id, label, Icon }) => {
