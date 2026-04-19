@@ -38,6 +38,8 @@ interface GanttChartProps {
 const HEADER_HEIGHT = 56;
 const ROW_HEIGHT = 40;
 const TABLE_WIDTH = 720;
+const TABLE_WIDTH_COMPACT = 280;
+const COMPACT_STORAGE_KEY = "apos.terminplan.compact";
 
 // Pixel pro Tag je nach Zoom-Stufe (initialer Richtwert — Timeline wird
 // aber auf mindestens diese Breite gestreckt).
@@ -58,6 +60,29 @@ export default function GanttChart({ projectId, canEdit, fullHeight }: GanttChar
     new Set(),
   );
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  // Kompakt-Modus: Tabelle auf Name-Spalte verkürzen. Default = false
+  // ("ausführliche Ansicht"); Wahl wird in localStorage persistiert.
+  const [compact, setCompact] = useState<boolean>(false);
+
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(COMPACT_STORAGE_KEY);
+      if (saved === "1") setCompact(true);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const handleCompactChange = useCallback((next: boolean) => {
+    setCompact(next);
+    try {
+      window.localStorage.setItem(COMPACT_STORAGE_KEY, next ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const effectiveTableWidth = compact ? TABLE_WIDTH_COMPACT : TABLE_WIDTH;
 
   const [modalOpen, setModalOpen] = useState(false);
   const [modalItem, setModalItem] = useState<ScheduleItemDTO | null>(null);
@@ -462,6 +487,8 @@ export default function GanttChart({ projectId, canEdit, fullHeight }: GanttChar
         onResetTrades={resetTrades}
         canEdit={canEdit}
         onAddClick={openCreateTop}
+        compact={compact}
+        onCompactChange={handleCompactChange}
       />
 
       {isEmpty ? (
@@ -499,12 +526,12 @@ export default function GanttChart({ projectId, canEdit, fullHeight }: GanttChar
             >
               <div
                 className="flex"
-                style={{ minWidth: TABLE_WIDTH + 400 }}
+                style={{ minWidth: effectiveTableWidth + 400 }}
               >
                 {/* Table Side */}
                 <div
                   className="shrink-0 sticky left-0 bg-white z-20 border-r border-gray-200"
-                  style={{ width: TABLE_WIDTH }}
+                  style={{ width: effectiveTableWidth }}
                 >
                   <GanttTable
                     visibleItems={visibleItems}
@@ -516,7 +543,8 @@ export default function GanttChart({ projectId, canEdit, fullHeight }: GanttChar
                     onAddChild={openCreateChild}
                     headerHeight={HEADER_HEIGHT}
                     rowHeight={ROW_HEIGHT}
-                    width={TABLE_WIDTH}
+                    width={effectiveTableWidth}
+                    compact={compact}
                   />
                 </div>
 

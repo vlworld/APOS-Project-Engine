@@ -17,6 +17,8 @@ interface GanttTableProps {
   rowHeight: number;
   width?: number;
   fullWidth?: boolean;
+  /** Kompakt-Modus: nur Nr + Name + Aktionen sichtbar, Rest ausgeblendet. */
+  compact?: boolean;
 }
 
 export default function GanttTable({
@@ -31,6 +33,7 @@ export default function GanttTable({
   rowHeight,
   width,
   fullWidth,
+  compact = false,
 }: GanttTableProps) {
   const wrapperStyle =
     fullWidth || width === undefined
@@ -51,11 +54,15 @@ export default function GanttTable({
       >
         <div className="shrink-0 w-[60px] px-2 text-right">Nr.</div>
         <div className="flex-1 min-w-[140px] px-2 truncate">Name</div>
-        <div className="shrink-0 w-[90px] px-2">Status</div>
-        <div className="shrink-0 w-[130px] px-2">Gewerk</div>
-        <div className="shrink-0 w-[90px] px-2">Start</div>
-        <div className="shrink-0 w-[90px] px-2">Ende</div>
-        <div className="shrink-0 w-[60px] px-2 text-right">Dauer</div>
+        {!compact && (
+          <>
+            <div className="shrink-0 w-[90px] px-2">Status</div>
+            <div className="shrink-0 w-[130px] px-2">Gewerk</div>
+            <div className="shrink-0 w-[90px] px-2">Start</div>
+            <div className="shrink-0 w-[90px] px-2">Ende</div>
+            <div className="shrink-0 w-[60px] px-2 text-right">Dauer</div>
+          </>
+        )}
         <div className="shrink-0 w-[56px]" />
       </div>
 
@@ -77,6 +84,7 @@ export default function GanttTable({
               onEdit={() => onEditItem(item)}
               onAddChild={() => onAddChild(item)}
               rowHeight={rowHeight}
+              compact={compact}
             />
           );
         })}

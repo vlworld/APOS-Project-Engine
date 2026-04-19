@@ -36,6 +36,7 @@ interface GanttRowProps {
   onAddChild: () => void;
   rowHeight: number;
   isLast?: boolean;
+  compact?: boolean;
 }
 
 export default function GanttRow({
@@ -48,6 +49,7 @@ export default function GanttRow({
   onEdit,
   onAddChild,
   rowHeight,
+  compact = false,
 }: GanttRowProps) {
   const status = STATUS_STYLES[item.status];
   const tradeColor = safeColor(tradeCategory?.color);
@@ -132,6 +134,8 @@ export default function GanttRow({
       </div>
 
       {/* Status-Badge (mit Verspätet-Indikator als Icon) */}
+      {!compact && (
+      <>
       <div className="shrink-0 w-[90px] px-2 flex items-center gap-1">
         <span
           className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${
@@ -178,6 +182,8 @@ export default function GanttRow({
       <div className="shrink-0 w-[60px] px-2 text-xs text-gray-500 text-right tabular-nums">
         {item.isMilestone ? "—" : `${item.durationWorkdays}d`}
       </div>
+      </>
+      )}
 
       {/* Aktionen: Bearbeiten + Unter-AP anlegen */}
       <div className="shrink-0 w-[56px] flex items-center justify-center gap-0.5 pr-1">
