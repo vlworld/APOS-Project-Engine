@@ -195,7 +195,7 @@ export default function EmailPreviewModal({
             type="button"
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600"
-            aria-label="Schliessen"
+            aria-label="Schließen"
           >
             <X className="w-5 h-5" />
           </button>
@@ -221,7 +221,7 @@ export default function EmailPreviewModal({
             onClick={onClose}
             className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800"
           >
-            Schliessen
+            Schließen
           </button>
           <a
             href={mailtoHref()}

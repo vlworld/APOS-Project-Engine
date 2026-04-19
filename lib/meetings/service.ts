@@ -31,6 +31,7 @@ import type {
   UpdateMeetingInput,
   UpdateMeetingItemInput,
 } from "@/lib/meetings/types";
+import { normalizeDueDateText } from "@/lib/meetings/dateText";
 
 // ---------------------------------------------------------------------------
 // Date-Helper (kopiert aus terminplan/service.ts, bewusst lokal)
@@ -536,7 +537,9 @@ export async function addMeetingItem(
       responsibleText: input.responsibleText?.trim() || null,
       responsibleUserId: input.responsibleUserId ?? null,
       dueDate,
-      dueDateText: input.dueDateText?.trim() || null,
+      // Freitext-Termin wird normalisiert (z.B. "KW 08" → "KW8"), damit
+      // spaeter beim Transfer zu Arbeitspaketen/ToDos einheitlich ist.
+      dueDateText: normalizeDueDateText(input.dueDateText) || null,
       status,
       copiedFromItemId,
     },
@@ -593,7 +596,7 @@ export async function updateMeetingItem(
     data.dueDate = input.dueDate ? parseDateOrIso(input.dueDate) : null;
   }
   if (input.dueDateText !== undefined) {
-    data.dueDateText = input.dueDateText?.trim() || null;
+    data.dueDateText = normalizeDueDateText(input.dueDateText) || null;
   }
 
   if (input.status !== undefined) {

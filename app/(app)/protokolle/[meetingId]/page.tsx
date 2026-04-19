@@ -41,6 +41,7 @@ import DatePicker from "@/components/ui/DatePicker";
 import { useToast } from "@/components/ui/Toast";
 import EmailPreviewModal from "@/components/meetings/EmailPreviewModal";
 import TodoFromItemModal from "@/components/meetings/TodoFromItemModal";
+import { normalizeDueDateText } from "@/lib/meetings/dateText";
 import type {
   MeetingDetailDTO,
   MeetingItemCategory,
@@ -1214,9 +1215,15 @@ function ItemRow({
         <input
           type="text"
           defaultValue={item.dueDateText ?? ""}
-          onBlur={(e) =>
-            onUpdate({ dueDateText: e.target.value.trim() || null })
-          }
+          onBlur={(e) => {
+            // KW/Q-Normalisierung: "KW 08", "Kw8", "KW 8/26" → "KW8" bzw.
+            // "KW8/26". Rohtext bleibt, wenn kein Pattern matcht.
+            const raw = e.target.value;
+            const normalized = normalizeDueDateText(raw);
+            // Sichtbar im Feld ersetzen, damit der User sieht, was gespeichert wird
+            if (normalized !== raw) e.target.value = normalized;
+            onUpdate({ dueDateText: normalized || null });
+          }}
           placeholder="o. Freitext: KW 8, Q1/26"
           className="w-full px-1.5 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
         />
