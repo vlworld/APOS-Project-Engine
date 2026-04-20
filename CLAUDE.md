@@ -327,6 +327,34 @@ Zweiter großer Session-Block am 2026-04-19 (ca. 15 weitere Commits).
   Clamp nach rechts am Viewport-Rand. z-[70]/[71] damit er auch über
   Modal-Backdrops liegt.
 
+## Session 2026-04-20 — DB-Schema-Drift-Fix
+
+**Problem**: Auf Prod (`apos.up.railway.app`) lud `/terminplan` nicht,
+die Projektliste war leer und Musterdaten konnten nicht geladen werden.
+
+**Ursache**: Der `prisma/migrations/`-Ordner hält nur die zwei Init-
+Migrationen vom 18.04. Alle Schema-Erweiterungen der Sessions
+2026-04-18 Abend, 2026-04-19 und 2026-04-19 spät wurden per
+`prisma db push` händisch auf die Railway-DB gepusht. Für die letzte
+Welle (Meeting/Todo/ScheduleItemEvent/Project.visibility/
+allowEditByOthers usw. sowie der CRM-/Steckbrief-Merge aus PR #2)
+hat das Push vermutlich nie stattgefunden → die Prisma-Queries auf
+`Project` inkludieren jetzt Spalten, die in der DB fehlen → 500er
+bei `GET /api/projekte` → kein Projekt sichtbar, `/terminplan`
+bleibt im Loading und `/api/muster` bricht beim ersten Insert.
+
+**Fix (`package.json`)**: `start`-Script führt vor `next start`
+ein `prisma db push --accept-data-loss --skip-generate` aus. So
+wird das Schema auf jedem Container-Boot mit `schema.prisma`
+angeglichen. Idempotent, keine Datenverluste bei rein additiven
+Änderungen (und die hatten wir seither ausschließlich).
+
+**Hinweis für nächsten Chat**: Langfristig sauberer wäre, die
+`db push`-Phase durch echte Migrationsdateien (`prisma migrate
+deploy`) zu ersetzen. Dafür müsste der Ist-Stand der Railway-DB
+einmal als Baseline eingefroren werden — ist oben auf die Noch-
+offen-Liste gewandert.
+
 ## Noch offen (priorisiert)
 
 1. **Realtime-Broadcast** in ScheduleItem-Service einhängen
@@ -365,6 +393,13 @@ Zweiter großer Session-Block am 2026-04-19 (ca. 15 weitere Commits).
 13. Passwörter der Seed-Accounts ändern
 14. Migrationsassistent v0.1 im OOS bauen
 15. Altes `apps/apos/` im OOS-Monorepo entfernen
+16. **Prisma-Migrations-Baseline** — Aktuellen Prod-Schema-Stand als
+    Migration einfrieren (`prisma migrate diff --from-schema-datasource
+    --to-schema-datamodel` lokal ausführen, Ergebnis als neue Migration
+    einchecken, `_prisma_migrations` auf Railway per `migrate resolve`
+    markieren). Danach kann der `db push`-Schritt im `start` wieder
+    durch `prisma migrate deploy` ersetzt werden (sicherer, keine
+    überraschenden Schema-Änderungen auf Startup).
 
 ## Commit-Regel
 
